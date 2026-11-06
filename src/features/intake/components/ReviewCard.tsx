@@ -1,6 +1,6 @@
 import { useState, type ReactNode } from 'react';
 import { View } from 'react-native';
-import { draftIssues, type DraftBatch, type DraftField } from '@/domain/draft';
+import { draftIssues, isFuzzyMatch, type DraftBatch, type DraftField } from '@/domain/draft';
 import { daysUntilExpiry, formatExpiry, parseExpiry } from '@/domain/expiry';
 import { pathLabel, walk } from '@/domain/tree';
 import { shopUnits } from '@/domain/types';
@@ -54,6 +54,8 @@ type Props = {
   flagMissing?: boolean;
   /** Review: collapses the row back into its summary card. */
   onDone?: () => void;
+  /** Turns down a near-name match: the row becomes a new medicine under the name as read. */
+  onUnmatch?: () => void;
 };
 
 /** One intake row, shared by review and manual entry. Remount (key) when the draft is replaced. */
@@ -64,8 +66,9 @@ export function ReviewCard({
   onRemove,
   flagMissing = true,
   onDone,
+  onUnmatch,
 }: Props) {
-  const { categories } = useInventory();
+  const { categories, medicines } = useInventory();
   const [expiryText, setExpiryText] = useState(d.expiry ? mmYy(d.expiry) : '');
   const today = useToday();
   const [qtyText, setQtyText] = useState(d.qty === null ? '' : String(d.qty));
@@ -87,6 +90,8 @@ export function ReviewCard({
   };
   const issues = draftIssues(d);
   const matched = d.matchedMedicineId !== null;
+  const match = matched ? medicines.find((m) => m.id === d.matchedMedicineId) : undefined;
+  const guessed = match && isFuzzyMatch(d.medicineName, match) ? match : undefined;
 
   const flag = (f: DraftField, text: string): string | undefined => {
     if (d.uncertain.includes(f)) return `Check ${NOUN[f]}`;
@@ -169,6 +174,14 @@ export function ReviewCard({
               />
             ) : null}
           </View>
+          {guessed ? (
+            <View style={{ gap: tokens.space[2] }}>
+              <T size={12} color={tokens.color.soon}>{`Matches existing ${guessed.name}`}</T>
+              {onUnmatch ? (
+                <Button label="New medicine instead" variant="secondary" onPress={onUnmatch} />
+              ) : null}
+            </View>
+          ) : null}
           {matched ? (
             <View>
               <KeyValueRow

@@ -22,10 +22,19 @@ export function ReviewRow({
   draft: d,
   onOpen,
   onConfirm,
+  matchName,
+  mergesInto,
+  expiry,
 }: {
   draft: DraftBatch;
   onOpen: () => void;
   onConfirm: () => void;
+  /** The existing medicine a near (not exact) name matched. */
+  matchName?: string;
+  /** Batch no of the live batch this row's quantity will be added to. */
+  mergesInto?: string;
+  /** Why the expiry looks wrong, if it does. */
+  expiry?: 'expired' | 'far' | null;
 }) {
   const state = rowState(d);
   const name = d.medicineName.trim() || 'Unnamed medicine';
@@ -93,6 +102,25 @@ export function ReviewRow({
             {d.companyName ? (
               <T size={12} color={tokens.color.muted} numberOfLines={1}>
                 {d.companyName}
+              </T>
+            ) : null}
+            {matchName ? (
+              <T size={12} color={tokens.color.muted} numberOfLines={1}>
+                {`Matches existing ${matchName}`}
+              </T>
+            ) : null}
+            {mergesInto ? (
+              <T size={12} color={tokens.color.muted} numberOfLines={1}>
+                {`Adds to existing batch ${mergesInto}`}
+              </T>
+            ) : null}
+            {expiry === 'expired' ? (
+              <T size={12} color={tokens.color.expired}>
+                Already expired
+              </T>
+            ) : expiry === 'far' && d.uncertain.includes('expiry') ? (
+              <T size={12} color={tokens.color.soon}>
+                Check: far future
               </T>
             ) : null}
             {why ? (

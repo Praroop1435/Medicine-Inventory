@@ -351,6 +351,85 @@ describe('review screen', () => {
     expect(screen.queryByRole('button', { name: 'Looks right: company' })).toBeNull();
   });
 
+  it('a near-name match says which medicine it matched; the user can confirm or make it new', async () => {
+    await start();
+    await openReview([
+      {
+        ...emptyDraft('scan'),
+        medicineName: 'Benadril syrup 100ml',
+        batchNo: 'K9',
+        expiry: { year: 2027, month: 5 },
+        qty: 2,
+      },
+    ]);
+    const row = within(screen.getByTestId('review-row'));
+    expect(row.getByText('Matches existing Benadryl syrup 100 ml')).toBeOnTheScreen();
+    expect(row.getByText('Check name')).toBeOnTheScreen();
+    expect(saveButton()).toHaveAccessibleName('Confirm 1 more row');
+    await expand('Benadril syrup 100ml');
+    await fireEvent.press(screen.getByRole('button', { name: 'New medicine instead' }));
+    expect(screen.getByText('New medicine · pick category and unit')).toBeOnTheScreen();
+    expect(screen.getByLabelText('Medicine name').props.value).toBe('Benadril syrup 100ml');
+    expect(select('Category')).toBe('Category, Pick a folder');
+  });
+
+  it('an exact match says nothing extra; one that will add to a batch says so', async () => {
+    const s = await start();
+    await openReview([
+      s.draft({
+        medicineName: 'Azithral 500',
+        batchNo: 'old1',
+        expiry: { year: 2027, month: 1 },
+        qty: 2,
+      }),
+      s.draft({
+        medicineName: 'Azithral 500',
+        batchNo: 'OLD1',
+        expiry: { year: 2027, month: 2 },
+        qty: 2,
+      }),
+    ]);
+    const [same, other] = screen.getAllByTestId('review-row').map((r) => within(r));
+    expect(same.getByText('Adds to existing batch OLD1')).toBeOnTheScreen();
+    expect(same.queryByText(/^Matches existing/)).toBeNull();
+    // A different expiry is a new batch, not a top-up.
+    expect(other.queryByText(/^Adds to existing batch/)).toBeNull();
+  });
+
+  it('flags an expiry already past or more than 5 years ahead, from any source', async () => {
+    const s = await start();
+    const y = new Date().getFullYear();
+    await openReview([
+      s.draft({
+        source: 'bulk',
+        medicineName: 'Azithral 500',
+        batchNo: 'P1',
+        expiry: { year: y - 1, month: 1 },
+        qty: 2,
+      }),
+      s.draft({
+        source: 'bulk',
+        medicineName: 'Azithral 500',
+        batchNo: 'P2',
+        expiry: { year: y + 6, month: 1 },
+        qty: 2,
+      }),
+      s.draft({
+        source: 'bulk',
+        medicineName: 'Azithral 500',
+        batchNo: 'P3',
+        expiry: { year: y + 1, month: 1 },
+        qty: 2,
+      }),
+    ]);
+    const [past, far, fine] = screen.getAllByTestId('review-row').map((r) => within(r));
+    expect(past.getByText('Already expired')).toHaveStyle({ color: tokens.color.expired });
+    expect(past.getByText('Check expiry')).toBeOnTheScreen();
+    expect(far.getByText('Check: far future')).toHaveStyle({ color: tokens.color.soon });
+    expect(fine.getByTestId('row-status-ok')).toBeOnTheScreen();
+    expect(saveButton()).toHaveAccessibleName('Confirm 2 more rows');
+  });
+
   it('a company read off the bill that the shop already has is not amber', async () => {
     const s = await start();
     await openReview([
@@ -483,6 +562,15 @@ describe('review screen', () => {
     await fireEvent.press(saveButton());
     expect(await screen.findByText('Saved 9 items')).toBeOnTheScreen();
     expect(spy.mock.calls[0][1].every((d) => d.categoryId === s.cat('Cough syrups'))).toBe(true);
+    // CLAVAM DRY SYP is its own product, not a fourth CLAVAM BID DRY SYP batch.
+    let meds: Medicine[] = [];
+    s.repos.inventory.watchMedicines(s.shopId, (m) => (meds = m))();
+    expect(
+      meds
+        .filter((m) => m.name.startsWith('CLAVAM'))
+        .map((m) => m.name)
+        .sort(),
+    ).toEqual(['CLAVAM 625 TAB', 'CLAVAM BID DRY SYP', 'CLAVAM DRY SYP']);
   });
 });
 

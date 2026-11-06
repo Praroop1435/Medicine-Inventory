@@ -8,6 +8,7 @@ import {
   type DraftBatch,
   type DraftField,
 } from '@/domain/draft';
+import { expiryDoubt } from '@/domain/expiry';
 import { normalizeName } from '@/domain/matching';
 import type { Company, Medicine } from '@/domain/types';
 import { useSession } from '@/features/onboarding/SessionContext';
@@ -27,6 +28,8 @@ type Intake = {
   /** Gives each new medicine the folder and/or unit it is still missing. */
   fillNew(patch: { categoryId?: string; unit?: string }): void;
   remove(key: string): void;
+  /** Turns down a near-name match: the row becomes a new medicine. */
+  unmatch(key: string): void;
   /** Saves every draft in one write and clears them; rejects (keeping them) on failure. */
   save(): Promise<void>;
 };
@@ -70,6 +73,24 @@ export function editDraft(
   }
   return tidy(next);
 }
+
+/** A new medicine under the name as read; the company it got from the match needs a look. */
+export const unmatch = (d: DraftBatch): DraftBatch => ({
+  ...d,
+  matchedMedicineId: null,
+  categoryId: null,
+  unit: null,
+  uncertain: [
+    ...d.uncertain.filter((f) => f !== 'medicineName' && f !== 'companyName'),
+    'companyName',
+  ],
+});
+
+// An expiry already past or more than 5 years out is more likely misread than real.
+const doubtExpiry = (d: DraftBatch, today: Date): DraftBatch =>
+  d.expiry && expiryDoubt(d.expiry, today) && !d.uncertain.includes('expiry')
+    ? { ...d, uncertain: [...d.uncertain, 'expiry'] }
+    : d;
 
 /** The one save path for every intake: refuses anything a human hasn't confirmed. */
 export function useSaveDrafts() {
@@ -128,11 +149,15 @@ export function IntakeProvider({ children }: { children: ReactNode }) {
   const value: Intake = {
     ...state,
     // Adapters needn't match: applyMatch is idempotent, so pre-matched drafts are unchanged.
-    setDrafts: (ds, bill = null) =>
+    setDrafts: (ds, bill = null) => {
+      const today = new Date();
       setState({
-        drafts: ds.map((d) => knownCompany(tidy(applyMatch(d, medicines, companies)), companies)),
+        drafts: ds.map((d) =>
+          doubtExpiry(knownCompany(tidy(applyMatch(d, medicines, companies)), companies), today),
+        ),
         bill,
-      }),
+      });
+    },
     update: (key, patch) => map(key, (d) => editDraft(d, patch, medicines, companies)),
     confirm: (key, field) => map(key, (d) => confirmField(d, field)),
     confirmRow: (key) => map(key, confirmRow),
@@ -141,6 +166,7 @@ export function IntakeProvider({ children }: { children: ReactNode }) {
         ...s,
         drafts: s.drafts.map((d) => fillNew(d, patch, medicines, companies)),
       })),
+    unmatch: (key) => map(key, unmatch),
     remove: (key) => setState((s) => ({ ...s, drafts: s.drafts.filter((d) => d.key !== key) })),
     async save() {
       await saveDrafts(state.drafts, state.bill);

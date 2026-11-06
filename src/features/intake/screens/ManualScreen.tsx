@@ -1,12 +1,12 @@
 import { router, useLocalSearchParams } from 'expo-router';
 import { useRef, useState } from 'react';
-import { canSave, confirmField, emptyDraft, type DraftBatch } from '@/domain/draft';
+import { canSave, confirmField, emptyDraft, fromMedicine, type DraftBatch } from '@/domain/draft';
 import type { Medicine } from '@/domain/types';
 import { useInventory } from '@/features/shared/hooks/useInventory';
 import { errorCopy, useToast } from '@/features/shared/Toast';
 import { Button, ButtonRow, Screen, Skeleton } from '@/ui';
 import { ReviewCard } from '../components/ReviewCard';
-import { editDraft, useSaveDrafts } from '../IntakeContext';
+import { editDraft, unmatch, useSaveDrafts } from '../IntakeContext';
 
 /** Type stock in by hand, one row at a time; `?medicineId=` starts from that medicine, `?categoryId=` presets the category. */
 export function ManualScreen() {
@@ -37,7 +37,7 @@ function ManualForm({ medicine, categoryId }: { medicine?: Medicine; categoryId:
     editDraft(d, p, medicines, companies);
   const [draft, setDraft] = useState(() =>
     medicine
-      ? edit(emptyDraft('manual'), { medicineName: medicine.name })
+      ? fromMedicine(emptyDraft('manual'), medicine, companies)
       : { ...emptyDraft('manual'), categoryId },
   );
   const [saving, setSaving] = useState(false);
@@ -79,6 +79,7 @@ function ManualForm({ medicine, categoryId }: { medicine?: Medicine; categoryId:
         flagMissing={false}
         onChange={(p) => setDraft((d) => edit(d, p))}
         onConfirm={(f) => setDraft((d) => confirmField(d, f))}
+        onUnmatch={() => setDraft(unmatch)}
       />
     </Screen>
   );

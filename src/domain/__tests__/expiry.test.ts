@@ -1,4 +1,11 @@
-import { batchStatus, daysUntilExpiry, expiryDate, formatExpiry, parseExpiry } from '../expiry';
+import {
+  batchStatus,
+  daysUntilExpiry,
+  expiryDate,
+  expiryDoubt,
+  formatExpiry,
+  parseExpiry,
+} from '../expiry';
 
 const today = new Date(2026, 10, 6);
 const alert = { first: 90, second: 30 };
@@ -55,6 +62,15 @@ describe('parseExpiry', () => {
     '11/226',
     'sept 26',
   ])('rejects %s', (s) => expect(parseExpiry(s)).toBeNull());
+});
+
+describe('expiryDoubt', () => {
+  it('flags an expiry already past and one more than 5 years ahead', () => {
+    expect(expiryDoubt({ year: 2026, month: 10 }, today)).toBe('expired');
+    expect(expiryDoubt({ year: 2026, month: 11 }, today)).toBeNull();
+    expect(expiryDoubt({ year: 2031, month: 11 }, today)).toBeNull();
+    expect(expiryDoubt({ year: 2031, month: 12 }, today)).toBe('far');
+  });
 });
 
 describe('formatExpiry', () => {

@@ -20,6 +20,8 @@ type Props = {
   bandEdge?: ReactNode;
   /** Centres short content in the space under the title; it still scrolls once it grows. */
   centered?: boolean;
+  /** Children are one FlatList that scrolls itself (long lists); the title stays above it. */
+  list?: boolean;
 };
 
 /** The navy band behind a light status bar; the bar goes back to dark when the screen loses focus. */
@@ -62,7 +64,20 @@ export function Screen({
   band,
   bandEdge,
   centered,
+  list,
 }: Props) {
+  const heading = title ? (
+    <View style={{ paddingTop: tokens.space[2], paddingBottom: tokens.space[3] }}>
+      <T size={24} weight="semibold" accessibilityRole="header">
+        {title}
+      </T>
+      {meta ? (
+        <T size={12} color={tokens.color.muted}>
+          {meta}
+        </T>
+      ) : null}
+    </View>
+  ) : null;
   return (
     <SafeAreaView
       edges={band ? ['left', 'right', 'bottom'] : undefined}
@@ -91,35 +106,31 @@ export function Screen({
             <T size={14}>{back}</T>
           </Pressable>
         ) : null}
-        <ScrollView
-          style={{ flex: 1 }}
-          contentContainerStyle={{
-            flexGrow: centered ? 1 : undefined,
-            paddingHorizontal: tokens.margin,
-            paddingBottom: tokens.space[6],
-          }}
-          keyboardShouldPersistTaps="handled"
-          keyboardDismissMode="none"
-        >
-          {band ? <Band edge={bandEdge}>{band}</Band> : null}
-          {title ? (
-            <View style={{ paddingTop: tokens.space[2], paddingBottom: tokens.space[3] }}>
-              <T size={24} weight="semibold" accessibilityRole="header">
-                {title}
-              </T>
-              {meta ? (
-                <T size={12} color={tokens.color.muted}>
-                  {meta}
-                </T>
-              ) : null}
-            </View>
-          ) : null}
-          {centered ? (
-            <View style={{ flex: 1, justifyContent: 'center' }}>{children}</View>
-          ) : (
-            children
-          )}
-        </ScrollView>
+        {list ? (
+          <View style={{ flex: 1, paddingHorizontal: tokens.margin }}>
+            {heading}
+            {children}
+          </View>
+        ) : (
+          <ScrollView
+            style={{ flex: 1 }}
+            contentContainerStyle={{
+              flexGrow: centered ? 1 : undefined,
+              paddingHorizontal: tokens.margin,
+              paddingBottom: tokens.space[6],
+            }}
+            keyboardShouldPersistTaps="handled"
+            keyboardDismissMode="none"
+          >
+            {band ? <Band edge={bandEdge}>{band}</Band> : null}
+            {heading}
+            {centered ? (
+              <View style={{ flex: 1, justifyContent: 'center' }}>{children}</View>
+            ) : (
+              children
+            )}
+          </ScrollView>
+        )}
         {footer ? (
           <View
             style={{

@@ -34,6 +34,13 @@ export function batchStatus(ym: YearMonth, today: Date, alertDays: AlertDays): B
   return 'ok';
 }
 
+/** Why a read expiry needs a second look: already past, or more than 5 years ahead. */
+export function expiryDoubt(ym: YearMonth, today: Date): 'expired' | 'far' | null {
+  if (daysUntilExpiry(ym, today) < 0) return 'expired';
+  const months = ym.year * 12 + ym.month - (today.getFullYear() * 12 + today.getMonth() + 1);
+  return months > 60 ? 'far' : null;
+}
+
 const toYear = (s: string) => (s.length === 2 ? 2000 + Number(s) : Number(s));
 const valid = (year: number, month: number): YearMonth | null =>
   month >= 1 && month <= 12 && year >= 2000 && year <= 2099 ? { year, month } : null;
