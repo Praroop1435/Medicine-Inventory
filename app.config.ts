@@ -17,7 +17,7 @@ const expoConfig: ExpoConfig = {
     package: cfg.androidPackage,
     googleServicesFile: process.env.GOOGLE_SERVICES_JSON ?? './google-services.json',
     adaptiveIcon: {
-      backgroundColor: '#f2f5f2',
+      backgroundColor: '#26344E',
       foregroundImage: './assets/images/android-icon-foreground.png',
       backgroundImage: './assets/images/android-icon-background.png',
       monochromeImage: './assets/images/android-icon-monochrome.png',
@@ -37,7 +37,7 @@ const expoConfig: ExpoConfig = {
     ['expo-camera', { cameraPermission: 'Used to scan the shop QR code and bills.' }],
     [
       'expo-splash-screen',
-      { backgroundColor: '#f2f5f2', image: './assets/images/splash-icon.png', imageWidth: 76 },
+      { backgroundColor: '#26344E', image: './assets/images/splash-icon.png', imageWidth: 76 },
     ],
   ],
   extra: { ...cfg, eas: { projectId: cfg.easProjectId } },
