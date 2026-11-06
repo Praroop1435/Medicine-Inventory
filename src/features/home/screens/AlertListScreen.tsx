@@ -1,8 +1,8 @@
 import { router, useLocalSearchParams } from 'expo-router';
 import { View } from 'react-native';
 import { batchesByStatus } from '@/domain/alerts';
-import { formatExpiry } from '@/domain/expiry';
-import { pluralUnit } from '@/lib/format';
+import { daysUntilExpiry, formatExpiry } from '@/domain/expiry';
+import { expiresIn, pluralUnit } from '@/lib/format';
 import { useInventory } from '@/features/shared/hooks/useInventory';
 import { useShop } from '@/features/shared/hooks/useShop';
 import { useToday } from '@/features/shared/hooks/useToday';
@@ -48,10 +48,10 @@ export function AlertListScreen() {
               <ListRow
                 key={b.id}
                 title={m.name}
-                subtitle={`${co} · Batch ${b.batchNo}`}
+                subtitle={`${co} · Batch ${b.batchNo} · ${formatExpiry(b.expiry)}`}
                 right={
                   <View style={{ alignItems: 'flex-end', gap: tokens.space[1] }}>
-                    <StatusPill status={s} label={formatExpiry(b.expiry)} />
+                    <StatusPill status={s} label={expiresIn(daysUntilExpiry(b.expiry, today))} />
                     <T size={12} color={tokens.color.muted} numberOfLines={1}>
                       {pluralUnit(m.unit, b.qty)}
                     </T>

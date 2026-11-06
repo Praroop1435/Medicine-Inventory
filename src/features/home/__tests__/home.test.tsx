@@ -182,14 +182,17 @@ describe('home', () => {
     expect(r.getPathname()).toBe('/alerts/soon');
     expect(screen.getAllByTestId('status-pill')).toHaveLength(5);
     expect(screen.getAllByText(/ · Batch /).map((n) => n.props.children)).toEqual([
-      'J&J · Batch C1',
-      'Pfizer · Batch C2',
-      'Sun · Batch B1',
-      'Reckitt · Batch B2',
-      'Micro Labs · Batch D1',
+      'J&J · Batch C1 · Nov 2026',
+      'Pfizer · Batch C2 · Nov 2026',
+      'Sun · Batch B1 · Nov 2026',
+      'Reckitt · Batch B2 · Nov 2026',
+      'Micro Labs · Batch D1 · Nov 2026',
     ]);
-    const first = within(screen.getByRole('button', { name: 'Benadryl, J&J · Batch C1' }));
-    expect(first.getByText('Nov 2026')).toBeOnTheScreen();
+    // The pill reads relative time; the month is in the subtitle.
+    const first = within(
+      screen.getByRole('button', { name: 'Benadryl, J&J · Batch C1 · Nov 2026' }),
+    );
+    expect(first.getByText('in 24 days')).toBeOnTheScreen();
     expect(first.getByText('6 bottles')).toBeOnTheScreen();
   });
 
@@ -198,12 +201,14 @@ describe('home', () => {
     await open(repos, '/alerts/expired');
     expect(await screen.findByRole('header', { name: 'Expired' })).toBeOnTheScreen();
     expect(screen.getAllByText(/ · Batch /).map((n) => n.props.children)).toEqual([
-      'Alembic · Batch A2',
-      'Cipla · Batch A1',
-      'GSK · Batch P1',
+      'Alembic · Batch A2 · Sep 2026',
+      'Cipla · Batch A1 · Oct 2026',
+      'GSK · Batch P1 · Oct 2026',
     ]);
+    const a2 = within(screen.getByRole('button', { name: /^Azithral,/ }));
+    expect(a2.getByText('37 days ago')).toBeOnTheScreen();
     const push = jest.spyOn(router, 'push').mockImplementation(() => {});
-    await fireEvent.press(screen.getByRole('button', { name: 'Azithral, Alembic · Batch A2' }));
+    await fireEvent.press(screen.getByRole('button', { name: /^Azithral,/ }));
     expect(push).toHaveBeenCalledWith(expect.stringMatching(/^\/medicine\/.+/));
   });
 
@@ -234,6 +239,13 @@ describe('home', () => {
     await open(repos);
     expect(await screen.findByText('Lotions not checked')).toBeOnTheScreen();
     expect(screen.getByText('Never checked')).toBeOnTheScreen();
+  });
+
+  it('skips folders with nothing on the shelf, even never-checked ones', async () => {
+    const { repos } = await seed({ checked: { Balms: 18, 'Eye/ear drops': null } });
+    await open(repos);
+    expect(await screen.findByText('Balms not checked')).toBeOnTheScreen();
+    expect(screen.queryByText('Eye/ear drops not checked')).toBeNull();
   });
 
   it('first run: 0 / 0 / 0 in muted grey and an Add your first stock card instead of categories', async () => {

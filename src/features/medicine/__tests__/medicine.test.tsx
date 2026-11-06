@@ -1,11 +1,13 @@
 import { router } from 'expo-router';
 import { act, fireEvent, renderRouter, screen, within } from 'expo-router/testing-library';
+import { StyleSheet } from 'react-native';
 import { createMemoryRepos } from '@/data/memory/createMemoryRepos';
 import type { Repos } from '@/data/repositories';
 import { emptyDraft } from '@/domain/draft';
 import type { Batch, Category, Medicine } from '@/domain/types';
 import { AppShell } from '@/features/shared/AppShell';
 import { ToastProvider } from '@/features/shared/Toast';
+import { tokens } from '@/ui';
 import MedicineRoute from '../../../../app/medicine/[id]';
 
 const mockStore = new Map<string, string>();
@@ -105,11 +107,45 @@ describe('medicine screen', () => {
     expect(heads.join('')).toMatch(/B1.*2 cartons[\s\S]*H2.*3 cartons/);
     expect(screen.getByText('Raj Pharma · #4471 · 4 Nov')).toBeOnTheScreen();
     expect(screen.getByText('Added by hand')).toBeOnTheScreen();
+    expect(screen.getByText('From bill')).toBeOnTheScreen();
+    expect(screen.getByText('Source')).toBeOnTheScreen();
     expect(screen.getByText('in 24 days')).toBeOnTheScreen();
     expect(screen.getByText('in 9 months')).toBeOnTheScreen();
     expect(screen.getAllByRole('button', { name: 'Sold 1' })).toHaveLength(2);
     expect(screen.getAllByRole('button', { name: 'Edit count' })).toHaveLength(2);
     expect(screen.getAllByRole('button', { name: 'Returned' })).toHaveLength(2);
+  });
+
+  it('an expired batch says so, makes Returned the main action and blocks Sold 1', async () => {
+    const s = await seed();
+    const draft = {
+      ...emptyDraft('manual'),
+      medicineName: 'Dolo',
+      companyName: 'Micro Labs',
+      unit: 'carton' as const,
+      batchNo: 'X9',
+      expiry: { year: 2026, month: 10 }, // ended 31 Oct: 6 days before 6 Nov
+      qty: 1,
+    };
+    let cats: Category[] = [];
+    s.repos.inventory.watchCategories(s.shopId, (c) => (cats = c))();
+    await s.repos.inventory.saveIntake(
+      s.shopId,
+      [{ ...draft, categoryId: cats[0].id }],
+      null,
+      s.deviceId,
+    );
+    await renderRouter(routes(s.repos), { initialUrl: `/medicine/${s.medId}` });
+    expect(
+      await screen.findByText('Expired 6 days ago — return it or take it off the shelf'),
+    ).toBeOnTheScreen();
+    const [sold] = screen.getAllByRole('button', { name: 'Sold 1' });
+    expect(sold).toBeDisabled();
+    expect(sold.props.accessibilityHint).toBe("Expired medicine can't be sold");
+    const [returned] = screen.getAllByRole('button', { name: 'Returned' });
+    expect(StyleSheet.flatten(returned.props.style).backgroundColor).toBe(tokens.color.primary);
+    await fireEvent.press(sold);
+    expect(liveQty(s.repos, s.shopId).X9).toBe(1);
   });
 
   it('Sold 1 lowers the quantity and toasts', async () => {

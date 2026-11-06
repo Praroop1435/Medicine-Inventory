@@ -17,13 +17,13 @@ import {
   Card,
   ConfirmDialog,
   EmptyState,
-  IconButton,
   ProgressBar,
   Screen,
   SectionHeader,
   Skeleton,
   Stepper,
   T,
+  TickButton,
   tokens,
 } from '@/ui';
 
@@ -134,7 +134,7 @@ export function CheckScreen() {
     <Screen
       back="Check"
       title={pathLabel(categories, category.id)}
-      meta={`${done} of ${total} batches checked${lastName ? ` · ${lastName}` : ''}`}
+      meta={`${done} of ${total} batch${total === 1 ? '' : 'es'} checked${lastName ? ` · ${lastName}` : ''}`}
       footer={
         confirming ? (
           <View style={{ gap: tokens.space[3] }}>
@@ -172,6 +172,11 @@ export function CheckScreen() {
           onCancel={() => setClosing(null)}
         />
       )}
+      {total > 0 ? (
+        <T size={14} color={tokens.color.muted} style={{ paddingBottom: tokens.space[3] }}>
+          Tap ✓ when the shelf matches, or change the number.
+        </T>
+      ) : null}
       <ProgressBar value={total ? done / total : 0} />
       {total === 0 ? (
         <EmptyState
@@ -194,17 +199,14 @@ export function CheckScreen() {
                     key={b.id}
                     testID={`check-row-${b.batchNo}`}
                     style={{
-                      minHeight: tokens.row,
-                      flexDirection: 'row',
-                      alignItems: 'center',
                       gap: tokens.space[2],
                       paddingHorizontal: tokens.space[4],
-                      paddingVertical: tokens.space[2],
+                      paddingVertical: tokens.space[3],
                       borderBottomWidth: 1,
                       borderBottomColor: tokens.color.rule,
                     }}
                   >
-                    <View style={{ flex: 1 }}>
+                    <View>
                       <T size={16} weight="medium" numberOfLines={1}>
                         {name}
                       </T>
@@ -219,18 +221,28 @@ export function CheckScreen() {
                         )}
                       </T>
                     </View>
-                    <Stepper
-                      value={edits[b.id] ?? b.qty}
-                      onChange={(n) => setEdits((e) => ({ ...e, [b.id]: n }))}
-                    />
-                    <IconButton
-                      icon="tick"
-                      label={`Count matches, ${b.batchNo}`}
-                      selected={ticked}
-                      onPress={() =>
-                        void (ticked || ((edits[b.id] ?? b.qty) === 0 ? setClosing(b) : mark(b)))
-                      }
-                    />
+                    {/* Controls on their own line so nothing truncates at 360dp. */}
+                    <View
+                      style={{
+                        flexDirection: 'row',
+                        alignItems: 'center',
+                        justifyContent: 'space-between',
+                      }}
+                    >
+                      <Stepper
+                        value={edits[b.id] ?? b.qty}
+                        onChange={(n) => setEdits((e) => ({ ...e, [b.id]: n }))}
+                      />
+                      <TickButton
+                        label="Matches"
+                        doneLabel="Checked"
+                        done={ticked}
+                        accessibilityLabel={`Count matches, ${b.batchNo}`}
+                        onPress={() =>
+                          void (ticked || ((edits[b.id] ?? b.qty) === 0 ? setClosing(b) : mark(b)))
+                        }
+                      />
+                    </View>
                   </View>
                 );
               })}

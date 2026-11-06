@@ -3,7 +3,17 @@ import { View } from 'react-native';
 import { batchStatus, daysUntilExpiry, formatExpiry } from '@/domain/expiry';
 import type { AlertDays, Batch, Bill, Unit } from '@/domain/types';
 import { dayMonth, expiresIn, pluralUnit } from '@/lib/format';
-import { Button, ButtonRow, Card, ConfirmDialog, KeyValueRow, StatusPill, T, tokens } from '@/ui';
+import {
+  Banner,
+  Button,
+  ButtonRow,
+  Card,
+  ConfirmDialog,
+  KeyValueRow,
+  StatusPill,
+  T,
+  tokens,
+} from '@/ui';
 import { EditCountSheet } from './EditCountSheet';
 
 export function BatchCard({
@@ -37,6 +47,10 @@ export function BatchCard({
       setBusy(false);
     }
   };
+  const days = daysUntilExpiry(batch.expiry, today);
+  const status = batchStatus(batch.expiry, today, alertDays);
+  // Expired stock may not be sold: the card steers to returning it instead.
+  const expired = status === 'expired';
   const from = !batch.billId
     ? 'Added by hand'
     : bill
@@ -52,17 +66,29 @@ export function BatchCard({
             size={16}
             weight="medium"
           >{`Batch ${batch.batchNo} · ${pluralUnit(unit, batch.qty)}`}</T>
-          <StatusPill
-            status={batchStatus(batch.expiry, today, alertDays)}
-            label={formatExpiry(batch.expiry)}
-          />
+          <StatusPill status={status} label={formatExpiry(batch.expiry)} />
         </View>
-        <KeyValueRow label="From bill" value={from} />
-        <KeyValueRow label="Expires" value={expiresIn(daysUntilExpiry(batch.expiry, today))} />
+        {expired ? (
+          <Banner text={`Expired ${expiresIn(days)} — return it or take it off the shelf`} />
+        ) : null}
+        <View>
+          <KeyValueRow label={batch.billId ? 'From bill' : 'Source'} value={from} />
+          <KeyValueRow label={expired ? 'Expired' : 'Expires'} value={expiresIn(days)} />
+        </View>
         <ButtonRow>
-          <Button label="Sold 1" variant="secondary" disabled={busy} onPress={() => run(onSold)} />
+          <Button
+            label="Sold 1"
+            variant="secondary"
+            disabled={busy || expired}
+            accessibilityHint={expired ? "Expired medicine can't be sold" : undefined}
+            onPress={() => run(onSold)}
+          />
           <Button label="Edit count" variant="secondary" onPress={() => setEditing(true)} />
-          <Button label="Returned" variant="secondary" onPress={() => setConfirming(true)} />
+          <Button
+            label="Returned"
+            variant={expired ? 'primary' : 'secondary'}
+            onPress={() => setConfirming(true)}
+          />
         </ButtonRow>
       </View>
       {editing && (

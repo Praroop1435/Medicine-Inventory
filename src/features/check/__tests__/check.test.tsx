@@ -140,6 +140,19 @@ describe('check screen', () => {
     });
   });
 
+  it('says what to do, labels the tick "Matches" then "Checked", and counts one batch in the singular', async () => {
+    const s = await seed();
+    await renderRouter(routes(s.repos), { initialUrl: `/check/${s.cat('Pain relief').id}` });
+    expect(await screen.findByText('0 of 1 batch checked')).toBeOnTheScreen();
+    expect(
+      screen.getByText('Tap ✓ when the shelf matches, or change the number.'),
+    ).toBeOnTheScreen();
+    expect(within(tick('D1')).getByText('Matches')).toBeOnTheScreen();
+    await fireEvent.press(tick('D1'));
+    expect(await within(tick('D1')).findByText('Checked')).toBeOnTheScreen();
+    expect(screen.getByText(/^1 of 1 batch checked/)).toBeOnTheScreen();
+  });
+
   it('groups rows by company, alphabetically, and leaves other categories out', async () => {
     await open();
     const text = screen
