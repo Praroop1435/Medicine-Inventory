@@ -1,5 +1,5 @@
 import { emptyDraft, type DraftBatch } from '@/domain/draft';
-import type { Batch, Category, Company, Medicine, StockEvent } from '@/domain/types';
+import type { Batch, Bill, Category, Company, Medicine, StockEvent } from '@/domain/types';
 import type { Repos } from '../repositories';
 
 const last = <T>(w: (cb: (v: T) => void) => () => void): T => {
@@ -51,6 +51,18 @@ export function runInventoryContract(make: () => Repos): void {
     expect(byOrder.map((c) => c.id)).toEqual(ids);
     expect(byOrder.map((c) => c.order)).toEqual(ids.map((_, i) => i));
     expect(after.find((c) => c.id === cs[0].id)?.lastCheckedAt).toBe(123);
+  });
+
+  it('watchBills returns saved bills', async () => {
+    await save([draft({})], {
+      supplier: 'S',
+      billNo: '9',
+      billDate: '2026-01-01',
+      scannedBy: deviceId,
+    });
+    const bills = last<Bill[]>((cb) => inv().watchBills(shopId, cb));
+    expect(bills).toHaveLength(1);
+    expect(bills[0]).toMatchObject({ id: batches()[0].billId, supplier: 'S', billNo: '9' });
   });
 
   it('seeds categories and defaults', () => {

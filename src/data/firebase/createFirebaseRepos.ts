@@ -20,7 +20,7 @@ import {
   type Query,
   type WriteBatch,
 } from '@react-native-firebase/firestore';
-import type { Batch, Category, Company, Medicine, Shop, StockEvent } from '@/domain/types';
+import type { Batch, Bill, Category, Company, Medicine, Shop, StockEvent } from '@/domain/types';
 import { newId } from '@/lib/ids';
 import type { Repos, Unsub } from '../repositories';
 import { planIntake, resolveMedicine } from '../shared/intake';
@@ -253,6 +253,7 @@ export function createFirebaseRepos(opts: { onWriteError?: (e: Error) => void } 
           (id, d) => batchFromDoc(id, d as BatchDoc),
           cb,
         ),
+      watchBills: (shopId, cb) => list(col(shopId, 'bills'), withId<Bill>, cb),
       watchMedicineEvents: (shopId, medicineId, n, cb) =>
         list(
           query(
