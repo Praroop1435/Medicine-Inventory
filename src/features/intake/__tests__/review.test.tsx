@@ -48,6 +48,20 @@ function Start() {
   );
 }
 
+/** Stands in for the scan screen: the review is pushed on top of it. */
+function ScanStub() {
+  const { setDrafts } = useIntake();
+  return (
+    <Button
+      label="Scan stub: read bill"
+      onPress={() => {
+        setDrafts(pending.drafts, pending.bill);
+        router.push('/intake/review');
+      }}
+    />
+  );
+}
+
 const routes = (repos: Repos) => ({
   _layout: () => (
     <ToastProvider>
@@ -55,6 +69,7 @@ const routes = (repos: Repos) => ({
     </ToastProvider>
   ),
   index: Start,
+  'intake/scan': ScanStub,
   'intake/review': ReviewRoute,
   'intake/manual': ManualRoute,
 });
@@ -223,10 +238,15 @@ describe('review screen', () => {
     const az = within(rows[0]);
     expect(az.getByText('Batch AZ88 · Exp Nov 2026 · Qty 2')).toBeOnTheScreen();
     expect(az.getByText('Alembic')).toBeOnTheScreen();
+    // One signal per row: the amber line and its button, no extra "Check" pill or tick.
     expect(az.getByText('Check expiry')).toBeOnTheScreen();
-    expect(az.getByTestId('row-status-check')).toBeOnTheScreen();
-    expect(within(rows[2]).getByTestId('row-status-ok')).toBeOnTheScreen();
-    expect(within(rows[2]).queryByRole('button', { name: /^Looks right/ })).toBeNull();
+    expect(az.getByRole('button', { name: 'Looks right, Azithral 500' })).toBeOnTheScreen();
+    expect(az.queryByText('Check')).toBeNull();
+    expect(az.queryByTestId('row-status-ok')).toBeNull();
+    const ok = within(rows[2]);
+    expect(ok.getByTestId('row-status-ok')).toBeOnTheScreen();
+    expect(ok.queryByRole('button', { name: /^Looks right/ })).toBeNull();
+    expect(ok.queryByRole('button', { name: 'Fix' })).toBeNull();
   });
 
   it('opens one row at a time, with amber fields to check', async () => {
@@ -264,8 +284,10 @@ describe('review screen', () => {
       }),
     ]);
     const fresh = within(screen.getAllByTestId('review-row')[1]);
-    expect(fresh.getByTestId('row-status-fix')).toBeOnTheScreen();
     expect(fresh.getByText('Add folder, unit')).toBeOnTheScreen();
+    // The Fix button is the only "Fix" on the row.
+    expect(fresh.getAllByText('Fix')).toHaveLength(1);
+    expect(fresh.queryByTestId('row-status-ok')).toBeNull();
     expect(saveButton()).toHaveAccessibleName('Confirm 1 more row');
     await fireEvent.press(fresh.getByRole('button', { name: 'Fix' }));
     expect(screen.getByText('New medicine · pick category and unit')).toBeOnTheScreen();
@@ -409,12 +431,29 @@ describe('review screen', () => {
     expect(liveBatches(s.repos, s.shopId)).toHaveLength(8);
   });
 
+  it('saving a scanned bill goes Home, past the scan screen, with the toast', async () => {
+    const s = await start();
+    pending = { drafts: sixDrafts(s).map((d) => ({ ...d, uncertain: [] })), bill: BILL };
+    await act(async () => router.push('/intake/scan'));
+    await fireEvent.press(await screen.findByRole('button', { name: 'Scan stub: read bill' }));
+    await fireEvent.press(await screen.findByRole('button', { name: 'Save 6 items' }));
+    expect(await screen.findByText('Saved 6 items')).toBeOnTheScreen();
+    expect(screen.getByRole('button', { name: 'Open review' })).toBeOnTheScreen();
+    expect(screen.queryByRole('button', { name: 'Scan stub: read bill' })).toBeNull();
+    expect(screen).toHavePathname('/');
+  });
+
   it('keeps the rows and says why when saving fails', async () => {
     const s = await start();
-    jest.spyOn(s.repos.inventory, 'saveIntake').mockRejectedValue(new Error('Offline and full'));
+    jest
+      .spyOn(s.repos.inventory, 'saveIntake')
+      .mockRejectedValue(new Error('FIRESTORE (11.0) INTERNAL ASSERTION FAILED'));
     await openReview(sixDrafts(s).map((d) => ({ ...d, uncertain: [] })));
     await fireEvent.press(screen.getByRole('button', { name: 'Save 6 items' }));
-    expect(await screen.findByText('Offline and full')).toBeOnTheScreen();
+    expect(
+      await screen.findByText("Couldn't save. Check the connection and try again."),
+    ).toBeOnTheScreen();
+    expect(screen.queryByText(/INTERNAL ASSERTION/)).toBeNull();
     expect(screen.getByText('6 of 6 confirmed')).toBeOnTheScreen();
     expect(saveButton()).toBeEnabled();
   });

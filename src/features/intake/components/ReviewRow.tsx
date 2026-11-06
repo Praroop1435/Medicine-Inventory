@@ -36,6 +36,19 @@ export function ReviewRow({
       : state === 'check'
         ? `Check ${d.uncertain.map((f) => NOUN[f]).join(', ')}`
         : null;
+  // Below the details: company and why on the left, the one action on the right.
+  const action =
+    state === 'fix' ? (
+      <Button label="Fix" variant="secondary" onPress={onOpen} />
+    ) : state === 'check' ? (
+      <TickButton
+        label="Looks right"
+        doneLabel="Confirmed"
+        done={false}
+        accessibilityLabel={`Looks right, ${name}`}
+        onPress={onConfirm}
+      />
+    ) : null;
   return (
     <View testID="review-row">
       <Card>
@@ -44,20 +57,39 @@ export function ReviewRow({
           accessibilityLabel={`Edit ${name}`}
           onPress={onOpen}
           style={({ pressed }) => ({
-            flexDirection: 'row',
-            alignItems: 'center',
-            gap: tokens.space[3],
-            padding: tokens.space[4],
+            gap: tokens.space[1] / 2,
+            paddingHorizontal: tokens.space[4],
+            paddingTop: tokens.space[4],
             opacity: pressed ? tokens.opacity.pressed : 1,
           })}
         >
-          <View style={{ flex: 1, gap: tokens.space[1] / 2 }}>
-            <T size={16} weight="semibold" numberOfLines={1}>
+          <View style={{ flexDirection: 'row', alignItems: 'center', gap: tokens.space[2] }}>
+            <T size={16} weight="semibold" numberOfLines={1} style={{ flex: 1 }}>
               {name}
             </T>
-            <T size={14} numberOfLines={1}>
-              {`Batch ${d.batchNo || '—'} · Exp ${d.expiry ? formatExpiry(d.expiry) : '—'} · Qty ${d.qty ?? '—'}`}
-            </T>
+            {state === 'ok' ? <RowStatus /> : null}
+          </View>
+          <T size={14} numberOfLines={1}>
+            {`Batch ${d.batchNo || '—'} · Exp ${d.expiry ? formatExpiry(d.expiry) : '—'} · Qty ${d.qty ?? '—'}`}
+          </T>
+        </Pressable>
+        <View
+          style={{
+            flexDirection: 'row',
+            alignItems: 'center',
+            gap: tokens.space[3],
+            paddingLeft: tokens.space[4],
+            paddingRight: tokens.space[3],
+            paddingTop: tokens.space[1] / 2,
+            paddingBottom: action ? tokens.space[3] : tokens.space[4],
+          }}
+        >
+          {/* Part of the row's tap target; the row's own label already names it for TalkBack. */}
+          <Pressable
+            accessible={false}
+            onPress={onOpen}
+            style={{ flex: 1, gap: tokens.space[1] / 2 }}
+          >
             {d.companyName ? (
               <T size={12} color={tokens.color.muted} numberOfLines={1}>
                 {d.companyName}
@@ -67,36 +99,14 @@ export function ReviewRow({
               <T
                 size={12}
                 color={state === 'fix' ? tokens.color.expired : tokens.color.soon}
-                numberOfLines={1}
+                numberOfLines={2}
               >
                 {why}
               </T>
             ) : null}
-          </View>
-          <RowStatus state={state} />
-        </Pressable>
-        {state === 'ok' ? null : (
-          <View
-            style={{
-              flexDirection: 'row',
-              justifyContent: 'flex-end',
-              paddingHorizontal: tokens.space[4],
-              paddingBottom: tokens.space[3],
-            }}
-          >
-            {state === 'fix' ? (
-              <Button label="Fix" variant="secondary" onPress={onOpen} />
-            ) : (
-              <TickButton
-                label="Looks right"
-                doneLabel="Confirmed"
-                done={false}
-                accessibilityLabel={`Looks right, ${name}`}
-                onPress={onConfirm}
-              />
-            )}
-          </View>
-        )}
+          </Pressable>
+          {action}
+        </View>
       </Card>
     </View>
   );

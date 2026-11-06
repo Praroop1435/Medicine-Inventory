@@ -6,7 +6,7 @@ import { pathLabel, walk } from '@/domain/tree';
 import { shopUnits } from '@/domain/types';
 import { useInventory } from '@/features/shared/hooks/useInventory';
 import { useShop } from '@/features/shared/hooks/useShop';
-import { useToast } from '@/features/shared/Toast';
+import { errorCopy, useToast } from '@/features/shared/Toast';
 import { Button, Card, EmptyState, ProgressBar, Screen, Select, T, tokens } from '@/ui';
 import { ReviewCard } from '../components/ReviewCard';
 import { ReviewRow, rowState } from '../components/ReviewRow';
@@ -45,9 +45,10 @@ export function ReviewScreen() {
     try {
       await save();
       toast(`Saved ${items(n)}`);
-      router.back();
+      // Home, not back to the camera or voice screen the rows came from.
+      router.dismissTo('/');
     } catch (e) {
-      toast(e instanceof Error ? e.message : "Couldn't save. Check the connection and try again.");
+      toast(errorCopy(e, "Couldn't save. Check the connection and try again."));
     } finally {
       inFlight.current = false;
       setSaving(false);
