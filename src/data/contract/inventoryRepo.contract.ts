@@ -162,4 +162,39 @@ export function runInventoryContract(make: () => Repos): void {
     await expect(inv().saveIntake(shopId, [draft({})], null, d2)).rejects.toThrow(/not a member/);
     await expect(inv().sellOne(shopId, 'x', 'ghost')).rejects.toThrow(/not a member/);
   });
+
+  it('saveIntake is atomic: an invalid later draft persists nothing', async () => {
+    await expect(
+      save(
+        [
+          draft({ medicineName: 'Good', batchNo: 'G' }),
+          draft({ medicineName: 'Bad', batchNo: 'X', categoryId: null }),
+        ],
+        { supplier: 'S', billNo: '1', billDate: '2026-01-01', scannedBy: deviceId },
+      ),
+    ).rejects.toThrow();
+    expect(comps()).toHaveLength(0);
+    expect(meds()).toHaveLength(0);
+    expect(batches()).toHaveLength(0);
+    await save([draft({})]);
+    expect(events(meds()[0].id)).toHaveLength(1);
+  });
+
+  it('setCount and markReturned reject on non-active batches', async () => {
+    await save([draft({})]);
+    const id = batches()[0].id;
+    await inv().markReturned(shopId, id, deviceId);
+    await expect(inv().setCount(shopId, id, 1, deviceId, 'checked')).rejects.toThrow(/not active/);
+    await expect(inv().markReturned(shopId, id, deviceId)).rejects.toThrow(/not active/);
+  });
+
+  it('merges reject same or missing ids', async () => {
+    await save([draft({})]);
+    const [a] = comps();
+    const [c] = last<Category[]>((cb) => inv().watchCategories(shopId, cb));
+    await expect(inv().mergeCompanies(shopId, a.id, a.id)).rejects.toThrow(/not found|same/);
+    await expect(inv().mergeCompanies(shopId, a.id, 'nope')).rejects.toThrow(/not found|same/);
+    await expect(inv().mergeCategories(shopId, c.id, c.id)).rejects.toThrow(/not found|same/);
+    await expect(inv().mergeCategories(shopId, 'nope', c.id)).rejects.toThrow(/not found|same/);
+  });
 }

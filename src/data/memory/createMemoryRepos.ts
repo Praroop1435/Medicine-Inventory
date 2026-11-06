@@ -1,3 +1,4 @@
+import { draftIssues } from '@/domain/draft';
 import { findMedicineMatch, normalizeName } from '@/domain/matching';
 import type {
   Batch,
@@ -39,6 +40,12 @@ const secret = () =>
   Array.from({ length: 3 }, () => Math.random().toString(36).slice(2, 10).padEnd(8, '0')).join('');
 const same = (a: string, b: string) => a.trim().toLowerCase() === b.trim().toLowerCase();
 
+function checkMerge(fromId: string, intoId: string, all: { id: string }[]) {
+  if (fromId === intoId) throw new Error('cannot merge into the same record');
+  if (!all.some((x) => x.id === fromId) || !all.some((x) => x.id === intoId))
+    throw new Error('record not found');
+}
+
 export function createMemoryRepos(now: () => number = Date.now): Repos {
   const shops = new Map<string, ShopState>();
   const listeners = new Set<() => void>();
@@ -64,9 +71,10 @@ export function createMemoryRepos(now: () => number = Date.now): Repos {
     return () => void listeners.delete(emit);
   };
   const write = async (shopId: string, deviceId: string, fn: (s: ShopState) => void) => {
-    const s = get(shopId);
-    member(s, deviceId);
+    member(get(shopId), deviceId);
+    const s = structuredClone(get(shopId)); // all-or-nothing: a throw leaves state untouched
     fn(s);
+    shops.set(shopId, s);
     notify();
   };
   const event = (
@@ -170,16 +178,15 @@ export function createMemoryRepos(now: () => number = Date.now): Repos {
         ),
       saveIntake: (shopId, drafts, bill, deviceId) =>
         write(shopId, deviceId, (s) => {
-          for (const d of drafts) {
-            if (d.qty === null || !d.expiry || !Number.isInteger(d.qty) || d.qty < 1)
-              throw new Error('incomplete draft');
-          }
           const billId = bill ? newId() : null;
           if (bill && billId) s.bills.push({ ...bill, id: billId, createdAt: now() });
           for (const d of drafts) {
             let med =
               s.medicines.find((m) => m.id === d.matchedMedicineId) ??
               findMedicineMatch(d.medicineName, s.medicines);
+            if (draftIssues({ ...d, matchedMedicineId: med?.id ?? null }).length || !d.expiry)
+              throw new Error('incomplete draft');
+            if (d.expiry.month < 1 || d.expiry.month > 12) throw new Error('invalid expiry');
             if (!med) {
               if (!d.categoryId || !d.unit) throw new Error('incomplete draft');
               const cn = normalizeName(d.companyName);
@@ -229,6 +236,7 @@ export function createMemoryRepos(now: () => number = Date.now): Repos {
         write(shopId, deviceId, (s) => {
           if (!Number.isInteger(qty) || qty < 0) throw new Error('invalid quantity');
           const b = batchOf(s, batchId);
+          if (b.status !== 'active') throw new Error('batch is not active');
           const old = b.qty;
           b.qty = qty;
           if (qty === 0) b.status = 'removed';
@@ -237,6 +245,7 @@ export function createMemoryRepos(now: () => number = Date.now): Repos {
       markReturned: (shopId, batchId, deviceId) =>
         write(shopId, deviceId, (s) => {
           const b = batchOf(s, batchId);
+          if (b.status !== 'active') throw new Error('batch is not active');
           b.status = 'returned';
           event(s, b, 'returned', -b.qty, deviceId);
         }),
@@ -258,12 +267,14 @@ export function createMemoryRepos(now: () => number = Date.now): Repos {
       },
       async mergeCompanies(shopId, fromId, intoId) {
         const s = get(shopId);
+        checkMerge(fromId, intoId, s.companies);
         s.medicines.forEach((m) => m.companyId === fromId && (m.companyId = intoId));
         s.companies = s.companies.filter((c) => c.id !== fromId);
         notify();
       },
       async mergeCategories(shopId, fromId, intoId) {
         const s = get(shopId);
+        checkMerge(fromId, intoId, s.categories);
         s.medicines.forEach((m) => m.categoryId === fromId && (m.categoryId = intoId));
         s.categories = s.categories.filter((c) => c.id !== fromId);
         notify();
