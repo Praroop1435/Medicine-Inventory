@@ -451,3 +451,8 @@ Folder delete uses a confirm dialog (Cancel / Delete); disabled with reason when
 - Onboarding: new "Stay on top of expiry" step after the name step (Allow notifications → `requestPermission()`, Not now → continue); test both paths with a fake Notifier.
 - Permission rationale before first camera/mic use (one line + Continue) and an "Open settings" fallback (`Linking.openSettings()`) when denied; Settings → Reminders shows "Notifications are off · Turn on" when not granted.
 - Settings "Reminders" row: first/second warning days, morning time, night time.
+
+### Task 15c: Any-angle straightening + PDF bills (spec §11.7)
+- `normalizeOrientation(lines)`: estimate the dominant text angle from line corner points (median of per-line baseline angles) and rotate all coordinates by −angle, any value in (−180°, 180°]; keep quarter-turn behaviour; tests: 0/90/180/270 and ±7°, ±20°, ±35° rotations of the real-bill fixture all parse to identical drafts.
+- PDF: `pickBillSource()` gains "PDF file" (expo-document-picker, `application/pdf`); render each page to an image with an Expo-compatible PDF page renderer (e.g. `react-native-pdf-thumbnail` or equivalent; justify choice), run `OcrEngine.recognize` per page, offset each page's coordinates by cumulative page height, concatenate, then `parseBillText` once. Behind a small `PdfRenderer` interface (fakeable in tests). Cap at 10 pages with a message beyond that.
+- ScanScreen: three buttons Camera · Gallery · PDF; "Reading page 2 of 3…" progress. Tests with fake PdfRenderer + OcrEngine: 2-page PDF → drafts from both pages on review; renderer failure → "Couldn't open this PDF."

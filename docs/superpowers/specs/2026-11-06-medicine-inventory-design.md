@@ -266,3 +266,8 @@ Every destructive action opens a confirm popup before doing anything: Delete fol
 - During onboarding, after the phone's name, a **"Stay on top of expiry"** screen explains the two notifications (morning expiry alert, night stock reminder) with one button **"Allow notifications"** → the Android system prompt (Android 13+ `POST_NOTIFICATIONS`), and a quiet "Not now" **[call]**.
 - Camera (scan bill, join QR) and microphone (voice) are asked **when first used**, each with a one-line reason shown before the system prompt.
 - If a permission is denied: the feature shows what's off and a **"Open settings"** button to the app's Android settings page; Settings → Reminders shows "Notifications are off · Turn on".
+
+### 11.7 Bills from any angle, photos and PDFs **[owner]**
+- **Any angle:** the scanner straightens text at any rotation — sideways, upside down and tilted (not only quarter turns) — before reading rows **[owner]**. Very blurry or heavily curved photos still fall back to "Couldn't read any medicines — retake or type them".
+- **Upload:** Scan bill offers three sources: **Camera · Photo from gallery · PDF file** **[owner: "add pdfs as well"]**. A PDF (e.g. a distributor bill received on WhatsApp) is rendered page by page into images on the phone and read with the same on-device OCR; rows from all pages go to one review screen. Nothing is uploaded **[call]**.
+- Same review rules as every scan: batch, expiry (and company from MFG) always amber until confirmed.
