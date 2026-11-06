@@ -19,6 +19,7 @@ export const tokens = {
     watchBg: '#eeeeee',
     watchInk: '#3d3d3d',
     amber: '#d97706',
+    scrim: 'rgba(10, 10, 10, 0.4)',
   },
   space: { 1: 4, 2: 8, 3: 12, 4: 16, 5: 20, 6: 24 },
   radius: { card: 8, control: 6, pill: 4 },
@@ -28,5 +29,7 @@ export const tokens = {
   row: 56,
   labelCol: 72,
   margin: 16,
+  fab: 52,
+  qr: 220,
 } as const;
 export type Tone = 'expired' | 'soon' | 'ink';

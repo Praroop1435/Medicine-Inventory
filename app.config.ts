@@ -25,6 +25,9 @@ const expoConfig: ExpoConfig = {
     'expo-router',
     '@react-native-firebase/app',
     '@react-native-firebase/auth',
+    'expo-secure-store',
+    'expo-sharing',
+    ['expo-camera', { cameraPermission: 'Used to scan the shop QR code and bills.' }],
     [
       'expo-splash-screen',
       { backgroundColor: '#f2f5f2', image: './assets/images/splash-icon.png', imageWidth: 76 },
