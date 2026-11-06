@@ -8,6 +8,7 @@ import type {
   Shop,
   StockEvent,
 } from '@/domain/types';
+import { descendantIds } from '@/domain/tree';
 import { newId } from '@/lib/ids';
 import type { CheckSession, Repos, Unsub } from '../repositories';
 import { planIntake } from '../shared/intake';
@@ -15,7 +16,9 @@ import {
   CATEGORIES,
   DEFAULT_ALERT_DAYS,
   DEFAULT_NOTIFY_TIME,
+  checkDeletable,
   checkMerge,
+  moveChange,
   newJoinSecret,
   returnChange,
   sellOneChange,
@@ -96,6 +99,7 @@ export function createMemoryRepos(now: () => number = Date.now): Repos {
             name: n,
             order,
             lastCheckedAt: null,
+            parentId: null,
           })),
           companies: [],
           medicines: [],
@@ -203,6 +207,19 @@ export function createMemoryRepos(now: () => number = Date.now): Repos {
             c.order = order;
           });
         }),
+      moveCategory: (shopId, id, newParentId, deviceId) =>
+        write(shopId, deviceId, (s) => {
+          const patch = moveChange(s.categories, id, newParentId);
+          Object.assign(
+            s.categories.find((c) => c.id === id)!,
+            patch,
+          );
+        }),
+      deleteCategory: (shopId, id, deviceId) =>
+        write(shopId, deviceId, (s) => {
+          checkDeletable(s.categories, s.medicines, id);
+          s.categories = s.categories.filter((c) => c.id !== id);
+        }),
       async renameCompany(shopId, companyId, name) {
         const co = get(shopId).companies.find((c) => c.id === companyId);
         if (!co) throw new Error('company not found');
@@ -239,9 +256,10 @@ export function createMemoryRepos(now: () => number = Date.now): Repos {
         const checked = s.checks[categoryId]?.checked ?? {};
         const complete = ids.every((id) => id in checked);
         if (complete) {
-          const c = s.categories.find((x) => x.id === categoryId);
-          if (!c) throw new Error('category not found');
-          c.lastCheckedAt = now();
+          if (!s.categories.some((x) => x.id === categoryId)) throw new Error('category not found');
+          const scope = new Set([categoryId, ...descendantIds(s.categories, categoryId)]);
+          const at = now();
+          s.categories.forEach((c) => scope.has(c.id) && (c.lastCheckedAt = at));
           delete s.checks[categoryId];
           notify();
         }

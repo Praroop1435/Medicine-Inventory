@@ -61,8 +61,17 @@ export interface InventoryRepo {
   ): Promise<void>;
   markReturned(shopId: string, batchId: string, deviceId: string): Promise<void>;
   upsertCategory(shopId: string, c: Omit<Category, 'id'> & { id?: string }): Promise<string>;
-  /** Sets order = index for each id, touching only `order`, atomically. */
+  /** Sets order = index for each id, touching only `order`, atomically. Pass one sibling group. */
   reorderCategories(shopId: string, orderedIds: string[], deviceId: string): Promise<void>;
+  /** Writes only parentId and order (last among the new siblings). Rejects a cycle. */
+  moveCategory(
+    shopId: string,
+    id: string,
+    newParentId: string | null,
+    deviceId: string,
+  ): Promise<void>;
+  /** Rejects unless the folder has no sub-folders and no medicines. */
+  deleteCategory(shopId: string, id: string, deviceId: string): Promise<void>;
   renameCompany(shopId: string, companyId: string, name: string): Promise<void>;
   mergeCompanies(shopId: string, fromId: string, intoId: string): Promise<void>; // repoints medicines, deletes fromId
   mergeCategories(shopId: string, fromId: string, intoId: string): Promise<void>;
@@ -85,7 +94,7 @@ export interface CheckRepo {
     qty: number,
     deviceId: string,
   ): Promise<void>;
-  /** Complete iff every id is checked: then sets lastCheckedAt and deletes the session. */
+  /** Complete iff every id is checked: then sets lastCheckedAt on the folder and every folder inside it, and deletes the session. */
   finishCheck(
     shopId: string,
     categoryId: string,

@@ -171,10 +171,17 @@ describe('check screen', () => {
     expect(lastEvent(s, 'AZ88')).toMatchObject({ type: 'checked', delta: 1 });
   });
 
-  it('counting 0 closes the batch', async () => {
+  it('counting 0 asks first: Cancel keeps the batch, Close batch closes it', async () => {
     const s = await open();
     await fireEvent.press(within(row('AMX31')).getByRole('button', { name: 'Decrease' }));
     await fireEvent.press(tick('AMX31'));
+    expect(screen.getByText('This closes batch AMX31.')).toBeOnTheScreen();
+    await fireEvent.press(screen.getByRole('button', { name: 'Cancel' }));
+    expect(screen.queryByTestId('confirm-dialog')).toBeNull();
+    expect(s.batch('AMX31').qty).toBe(1);
+    expect(tick('AMX31')).not.toBeSelected();
+    await fireEvent.press(tick('AMX31'));
+    await fireEvent.press(screen.getByRole('button', { name: 'Close batch' }));
     await act(async () => {});
     expect(screen.queryByTestId('check-row-AMX31')).toBeNull();
     expect(s.batch('AMX31')).toBeUndefined();
@@ -224,6 +231,67 @@ describe('check screen', () => {
     expect(back).toHaveBeenCalled();
     expect(s.cat('Antibiotics').lastCheckedAt).toBeNull();
     expect(session(s)).not.toBeNull();
+  });
+});
+
+describe('nested folders', () => {
+  const withSubFolder = async () => {
+    const s = await seed();
+    const kids = await s.repos.inventory.upsertCategory(s.shopId, {
+      name: 'Kids',
+      order: 0,
+      lastCheckedAt: null,
+      parentId: s.cat('Antibiotics').id,
+    });
+    await s.repos.inventory.saveIntake(
+      s.shopId,
+      [
+        {
+          ...emptyDraft('manual'),
+          medicineName: 'Moxikind',
+          companyName: 'Mankind',
+          categoryId: kids,
+          unit: 'strip',
+          batchNo: 'MK1',
+          expiry: { year: 2027, month: 2 },
+          qty: 2,
+        },
+      ],
+      null,
+      s.deviceId,
+    );
+    return { ...s, kids };
+  };
+
+  it('checking a parent covers sub-folder batches, grouped by sub-folder then company', async () => {
+    const s = await withSubFolder();
+    await renderRouter(routes(s.repos), { initialUrl: `/check/${s.cat('Antibiotics').id}` });
+    expect(await screen.findByText('1 of 5 batches checked · Priya')).toBeOnTheScreen();
+    const back = jest.spyOn(router, 'back').mockImplementation(() => {});
+    const heads = screen
+      .getAllByRole('header')
+      .map((n) => n.props.children as string)
+      .filter((t) => t !== 'Antibiotics');
+    expect(heads).toEqual(['ALEMBIC', 'CIPLA', 'KIDS · MANKIND']);
+    for (const no of ['AZ94', 'AMX31', 'CX210', 'MK1']) {
+      await fireEvent.press(tick(no));
+      await act(async () => {});
+    }
+    await fireEvent.press(screen.getByRole('button', { name: 'Finish check' }));
+    expect(await screen.findByText('Antibiotics checked')).toBeOnTheScreen();
+    expect(back).toHaveBeenCalled();
+    let cats: Category[] = [];
+    s.repos.inventory.watchCategories(s.shopId, (c) => (cats = c))();
+    expect(cats.find((c) => c.id === s.kids)?.lastCheckedAt).toEqual(expect.any(Number));
+  });
+
+  it('the check tab lists top-level folders only, counting sub-folder batches', async () => {
+    const s = await withSubFolder();
+    await renderRouter(routes(s.repos), { initialUrl: '/check' });
+    expect(
+      await screen.findByRole('button', { name: 'Antibiotics, partly checked · 1 of 5' }),
+    ).toBeOnTheScreen();
+    expect(screen.queryByRole('button', { name: /^Kids,/ })).toBeNull();
   });
 });
 

@@ -20,7 +20,8 @@ import {
   type Query,
   type WriteBatch,
 } from '@react-native-firebase/firestore';
-import type { Batch, Bill, Category, Company, Medicine, Shop, StockEvent } from '@/domain/types';
+import type { Batch, Bill, Company, Medicine, Shop, StockEvent } from '@/domain/types';
+import { descendantIds } from '@/domain/tree';
 import { newId } from '@/lib/ids';
 import type { CheckSession, Repos, Unsub } from '../repositories';
 import { planIntake, resolveMedicine } from '../shared/intake';
@@ -28,7 +29,9 @@ import {
   CATEGORIES,
   DEFAULT_ALERT_DAYS,
   DEFAULT_NOTIFY_TIME,
+  checkDeletable,
   checkMerge,
+  moveChange,
   newJoinSecret,
   returnChange,
   sellOneChange,
@@ -39,6 +42,7 @@ import { ensureSignedIn } from './auth';
 import {
   batchFromDoc,
   batchToDoc,
+  categoryFromDoc,
   deviceFromDoc,
   withId,
   withoutId,
@@ -167,6 +171,8 @@ export function createFirebaseRepos(opts: { onWriteError?: (e: Error) => void } 
       wb.delete(ref(shopId, c, fromId));
     });
   };
+  const categories = async (shopId: string) =>
+    (await readDocs(col(shopId, 'categories'))).docs.map((d) => categoryFromDoc(d.id, d.data()));
   const update = (r: ReturnType<typeof ref>, data: DocumentData) =>
     write((wb) => wb.update(r, data));
 
@@ -186,7 +192,12 @@ export function createFirebaseRepos(opts: { onWriteError?: (e: Error) => void } 
         const device: DeviceDoc = { displayName, joinedAt: Date.now(), removed: false, joinSecret };
         wb.set(ref(shopId, 'devices', deviceId), device);
         CATEGORIES.forEach((n, order) =>
-          wb.set(ref(shopId, 'categories', newId()), { name: n, order, lastCheckedAt: null }),
+          wb.set(ref(shopId, 'categories', newId()), {
+            name: n,
+            order,
+            lastCheckedAt: null,
+            parentId: null,
+          }),
         );
         try {
           await online(wb.commit());
@@ -246,7 +257,7 @@ export function createFirebaseRepos(opts: { onWriteError?: (e: Error) => void } 
           onError,
         ),
       watchCategories: (shopId, cb) =>
-        list(query(col(shopId, 'categories'), orderBy('order')), withId<Category>, cb),
+        list(query(col(shopId, 'categories'), orderBy('order')), categoryFromDoc, cb),
       watchCompanies: (shopId, cb) => list(col(shopId, 'companies'), withId<Company>, cb),
       watchMedicines: (shopId, cb) => list(col(shopId, 'medicines'), withId<Medicine>, cb),
       watchLiveBatches: (shopId, cb) =>
@@ -342,6 +353,24 @@ export function createFirebaseRepos(opts: { onWriteError?: (e: Error) => void } 
           orderedIds.forEach((id, order) => wb.update(ref(shopId, 'categories', id), { order })),
         );
       },
+      async moveCategory(shopId, id, newParentId) {
+        update(
+          ref(shopId, 'categories', id),
+          moveChange(await categories(shopId), id, newParentId),
+        );
+      },
+      async deleteCategory(shopId, id) {
+        const [cats, meds] = await Promise.all([
+          categories(shopId),
+          readDocs(query(col(shopId, 'medicines'), where('categoryId', '==', id), limit(1))),
+        ]);
+        checkDeletable(
+          cats,
+          meds.docs.map((d) => withId<Medicine>(d.id, d.data())),
+          id,
+        );
+        write((wb) => wb.delete(ref(shopId, 'categories', id)));
+      },
       renameCompany: async (shopId, companyId, name) =>
         update(ref(shopId, 'companies', companyId), { name: name.trim() }),
       mergeCompanies: (shopId, fromId, intoId) =>
@@ -385,11 +414,15 @@ export function createFirebaseRepos(opts: { onWriteError?: (e: Error) => void } 
         const s = await readDoc(r);
         const checked = s.exists() ? (s.data() as CheckSession).checked : {};
         const complete = ids.every((id) => id in checked);
-        if (complete)
+        if (complete) {
+          const at = Date.now();
+          const inside = descendantIds(await categories(shopId), categoryId);
           write((wb) => {
-            wb.update(ref(shopId, 'categories', categoryId), { lastCheckedAt: Date.now() });
+            for (const id of [categoryId, ...inside])
+              wb.update(ref(shopId, 'categories', id), { lastCheckedAt: at });
             wb.delete(r);
           });
+        }
         return { complete };
       },
     },

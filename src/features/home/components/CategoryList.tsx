@@ -1,7 +1,7 @@
 import { router } from 'expo-router';
 import { View } from 'react-native';
-import { categorySummary } from '@/domain/alerts';
-import type { BatchStatus } from '@/domain/types';
+import { childrenOf, rollupSummary } from '@/domain/tree';
+import type { BatchStatus, Category } from '@/domain/types';
 import { useRepos } from '@/data/RepoContext';
 import { useSession } from '@/features/onboarding/SessionContext';
 import { medicineCount } from '@/lib/format';
@@ -13,8 +13,19 @@ import { Card, IconButton, ListRow, Skeleton, StatusPill } from '@/ui';
 const label = (worst: BatchStatus | null, n: number, first: number) =>
   worst === 'expired' ? `${n} expired` : worst === 'soon' ? `${n} soon` : `${n} in ${first} days`;
 
-/** Category rows with the worst-status pill. Reused by the Stock tab. */
-export function CategoryList({ limit, editable }: { limit?: number; editable?: boolean }) {
+/** One sibling group of folders with rolled-up counts and worst-status pill (Home, Stock, folders). */
+export function CategoryList({
+  parentId = null,
+  limit,
+  editable,
+  onMenu,
+}: {
+  parentId?: string | null;
+  limit?: number;
+  editable?: boolean;
+  /** Adds a ⋯ button per row. */
+  onMenu?: (c: Category) => void;
+}) {
   const { categories, medicines, batches, loading } = useInventory();
   const { inventory } = useRepos();
   const { session } = useSession();
@@ -28,9 +39,10 @@ export function CategoryList({ limit, editable }: { limit?: number; editable?: b
         <Skeleton />
       </Card>
     );
-  const sorted = [...categories].sort((a, b) => a.order - b.order || a.name.localeCompare(b.name));
+  const sorted = childrenOf(categories, parentId);
   const rows = sorted.slice(0, limit);
-  // Renumbers the whole list so duplicate `order` values still move.
+  if (sorted.length === 0) return null;
+  // Renumbers the whole sibling group so duplicate `order` values still move.
   const move = (i: number, d: -1 | 1) => {
     if (!session || !sorted[i + d]) return;
     const ids = sorted.map((c) => c.id);
@@ -40,7 +52,7 @@ export function CategoryList({ limit, editable }: { limit?: number; editable?: b
   return (
     <Card>
       {rows.map((c, i) => {
-        const s = categorySummary(c.id, medicines, batches, today, shop.alertDays);
+        const s = rollupSummary(categories, medicines, batches, c.id, today, shop.alertDays);
         return (
           <ListRow
             key={c.id}
@@ -59,12 +71,19 @@ export function CategoryList({ limit, editable }: { limit?: number; editable?: b
                     />
                   ))}
                 </View>
-              ) : s.worst && s.worst !== 'ok' ? (
-                <StatusPill
-                  status={s.worst}
-                  label={label(s.worst, s.worstCount, shop.alertDays.first)}
-                />
-              ) : null
+              ) : (
+                <>
+                  {s.worst && s.worst !== 'ok' ? (
+                    <StatusPill
+                      status={s.worst}
+                      label={label(s.worst, s.worstCount, shop.alertDays.first)}
+                    />
+                  ) : null}
+                  {onMenu ? (
+                    <IconButton icon="more" label={`More, ${c.name}`} onPress={() => onMenu(c)} />
+                  ) : null}
+                </>
+              )
             }
             chevron={!editable}
             onPress={editable ? undefined : () => router.push(`/category/${c.id}`)}

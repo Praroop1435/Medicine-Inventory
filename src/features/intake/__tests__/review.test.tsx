@@ -369,6 +369,30 @@ describe('manual entry', () => {
     expect(screen.getByRole('button', { name: 'Vitamins' })).toBeSelected();
   });
 
+  it('the category picker shows folder paths and adds a new top-level folder', async () => {
+    const s = await seed();
+    const dry = await s.repos.inventory.upsertCategory(s.shopId, {
+      name: 'Dry',
+      order: 0,
+      lastCheckedAt: null,
+      parentId: s.cat('Cough syrups'),
+    });
+    await renderRouter(routes(s.repos), { initialUrl: '/intake/manual' });
+    await fireEvent.changeText(await screen.findByLabelText('Medicine name'), 'Zincovit');
+    await fireEvent.press(screen.getByRole('button', { name: 'Cough syrups › Dry' }));
+    expect(screen.getByRole('button', { name: 'Cough syrups › Dry' })).toBeSelected();
+    expect(screen.queryByRole('button', { name: 'Dry' })).toBeNull();
+
+    await fireEvent.press(screen.getByRole('button', { name: '+ New folder' }));
+    await fireEvent.changeText(screen.getByLabelText('Folder name'), 'Ayurveda');
+    await fireEvent.press(screen.getByRole('button', { name: 'Save' }));
+    expect(await screen.findByRole('button', { name: 'Ayurveda' })).toBeSelected();
+    let cats: Category[] = [];
+    s.repos.inventory.watchCategories(s.shopId, (c) => (cats = c))();
+    expect(cats.find((c) => c.name === 'Ayurveda')).toMatchObject({ parentId: null });
+    expect(cats.find((c) => c.id === dry)?.parentId).toBe(s.cat('Cough syrups'));
+  });
+
   it('Save & next saves one row and clears only name, batch, expiry and quantity', async () => {
     const s = await seed();
     const spy = jest.spyOn(s.repos.inventory, 'saveIntake');

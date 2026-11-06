@@ -4,6 +4,7 @@ import { View } from 'react-native';
 import { useRepos } from '@/data/RepoContext';
 import type { CheckSession } from '@/data/repositories';
 import { batchStatus, formatExpiry } from '@/domain/expiry';
+import { descendantIds, pathLabel, pathOf } from '@/domain/tree';
 import type { Batch, Device } from '@/domain/types';
 import { useSession } from '@/features/onboarding/SessionContext';
 import { useInventory } from '@/features/shared/hooks/useInventory';
@@ -14,6 +15,7 @@ import {
   Button,
   ButtonRow,
   Card,
+  ConfirmDialog,
   EmptyState,
   IconButton,
   ProgressBar,
@@ -25,9 +27,10 @@ import {
   tokens,
 } from '@/ui';
 
-type Row = { batch: Batch; name: string; company: string };
+// group: "Cough › Dry · Cipla" for a sub-folder's batches, just the company for this folder's own.
+type Row = { batch: Batch; name: string; folder: string; company: string; group: string };
 
-/** Routine stock check of one category (§6.5): tick if the shelf matches, or fix the count first. */
+/** Routine stock check of one folder and everything inside it (§6.5, §11.1): tick if the shelf matches, or fix the count first. */
 export function CheckScreen() {
   const { categoryId } = useLocalSearchParams<{ categoryId: string }>();
   const { categories, medicines, companies, batches, loading } = useInventory();
@@ -41,6 +44,8 @@ export function CheckScreen() {
   // Stepper values the user changed and hasn't ticked yet, by batch id.
   const [edits, setEdits] = useState<Record<string, number>>({});
   const [confirming, setConfirming] = useState(false);
+  // Batch whose count of 0 waits for "Close batch".
+  const [closing, setClosing] = useState<Batch | null>(null);
   const finishing = useRef(false);
   const shopId = session?.shopId;
   const deviceId = session?.deviceId;
@@ -68,21 +73,26 @@ export function CheckScreen() {
       </Screen>
     );
 
+  const scope = new Set([category.id, ...descendantIds(categories, category.id)]);
+  const depth = pathOf(categories, category.id).length;
   const rows: Row[] = batches.flatMap((batch) => {
     const m = medicines.find((x) => x.id === batch.medicineId);
-    if (m?.categoryId !== category.id) return [];
+    if (!m || !scope.has(m.categoryId)) return [];
+    const folder = pathOf(categories, m.categoryId).slice(depth).join(' › ');
+    const company = companies.find((c) => c.id === m.companyId)?.name ?? '';
     return [
-      { batch, name: m.name, company: companies.find((c) => c.id === m.companyId)?.name ?? '' },
+      { batch, name: m.name, folder, company, group: folder ? `${folder} · ${company}` : company },
     ];
   });
   rows.sort(
     (a, b) =>
+      a.folder.localeCompare(b.folder) ||
       a.company.localeCompare(b.company) ||
       a.name.localeCompare(b.name) ||
       a.batch.expiry.year - b.batch.expiry.year ||
       a.batch.expiry.month - b.batch.expiry.month,
   );
-  const groups = [...new Set(rows.map((r) => r.company))];
+  const groups = [...new Set(rows.map((r) => r.group))];
   const ticks = progress?.checked ?? {};
   const done = rows.filter((r) => ticks[r.batch.id]).length;
   const total = rows.length;
@@ -116,7 +126,7 @@ export function CheckScreen() {
   return (
     <Screen
       back="Check"
-      title={category.name}
+      title={pathLabel(categories, category.id)}
       meta={`${done} of ${total} batches checked${lastName ? ` · ${lastName}` : ''}`}
       footer={
         confirming ? (
@@ -142,6 +152,19 @@ export function CheckScreen() {
         )
       }
     >
+      {closing && (
+        <ConfirmDialog
+          title="Save count of 0?"
+          message={`This closes batch ${closing.batchNo}.`}
+          confirmLabel="Close batch"
+          destructive
+          onConfirm={() => {
+            setClosing(null);
+            void mark(closing);
+          }}
+          onCancel={() => setClosing(null)}
+        />
+      )}
       <ProgressBar value={total ? done / total : 0} />
       {total === 0 ? <EmptyState title="No stock in this category" /> : null}
       {groups.map((g) => (
@@ -149,7 +172,7 @@ export function CheckScreen() {
           <SectionHeader title={g} />
           <Card>
             {rows
-              .filter((r) => r.company === g)
+              .filter((r) => r.group === g)
               .map(({ batch: b, name }) => {
                 const expired = batchStatus(b.expiry, today, shop.alertDays) === 'expired';
                 const ticked = !!ticks[b.id] && edits[b.id] === undefined;
@@ -191,7 +214,9 @@ export function CheckScreen() {
                       icon="tick"
                       label={`Count matches, ${b.batchNo}`}
                       selected={ticked}
-                      onPress={() => void (ticked || mark(b))}
+                      onPress={() =>
+                        void (ticked || ((edits[b.id] ?? b.qty) === 0 ? setClosing(b) : mark(b)))
+                      }
                     />
                   </View>
                 );

@@ -2,6 +2,7 @@ import type { Batch, Device } from '@/domain/types';
 import {
   batchFromDoc,
   batchToDoc,
+  categoryFromDoc,
   deviceFromDoc,
   fromExpiryKey,
   toExpiryKey,
@@ -44,5 +45,21 @@ describe('converters', () => {
 
   it('withId / withoutId are inverses', () => {
     expect(withId('c1', withoutId({ id: 'c1', name: 'Co' }))).toEqual({ id: 'c1', name: 'Co' });
+  });
+});
+
+test('categoryFromDoc treats a doc without parentId as top level', () => {
+  expect(categoryFromDoc('c1', { name: 'A', order: 2, lastCheckedAt: null })).toEqual({
+    id: 'c1',
+    name: 'A',
+    order: 2,
+    lastCheckedAt: null,
+    parentId: null,
+  });
+  expect(
+    categoryFromDoc('c2', { name: 'B', order: 0, lastCheckedAt: 5, parentId: 'c1' }),
+  ).toMatchObject({
+    id: 'c2',
+    parentId: 'c1',
   });
 });

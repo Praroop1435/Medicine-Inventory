@@ -2,8 +2,10 @@ import { useState, type ReactNode } from 'react';
 import { View } from 'react-native';
 import { draftIssues, type DraftBatch, type DraftField } from '@/domain/draft';
 import { formatExpiry, parseExpiry } from '@/domain/expiry';
+import { pathLabel, walk } from '@/domain/tree';
 import { UNITS } from '@/domain/types';
 import { useInventory } from '@/features/shared/hooks/useInventory';
+import { CategoryEditor } from '@/features/stock/components/CategoryEditor';
 import { Card, Chip, ChipRow, Field, IconButton, KeyValueRow, Pill, T, tokens } from '@/ui';
 import type { DraftPatch } from '../IntakeContext';
 import { MedicineAutocomplete } from './MedicineAutocomplete';
@@ -39,6 +41,7 @@ export function ReviewCard({ draft: d, onChange, onConfirm, onRemove, flagMissin
   const { categories } = useInventory();
   const [expiryText, setExpiryText] = useState(d.expiry ? formatExpiry(d.expiry) : '');
   const [qtyText, setQtyText] = useState(d.qty === null ? '' : String(d.qty));
+  const [addingFolder, setAddingFolder] = useState(false);
   const issues = draftIssues(d);
   const matched = d.matchedMedicineId !== null;
 
@@ -108,7 +111,7 @@ export function ReviewCard({ draft: d, onChange, onConfirm, onRemove, flagMissin
             <View>
               <KeyValueRow
                 label="Category"
-                value={categories.find((c) => c.id === d.categoryId)?.name ?? ''}
+                value={d.categoryId ? pathLabel(categories, d.categoryId) : ''}
               />
               <KeyValueRow label="Company" value={d.companyName} />
               <KeyValueRow label="Unit" value={d.unit ? cap(d.unit) : ''} />
@@ -117,20 +120,26 @@ export function ReviewCard({ draft: d, onChange, onConfirm, onRemove, flagMissin
             <>
               {d.medicineName.trim() ? <Pill label="New" /> : null}
               {input('companyName', 'Company', d.companyName, (t) => onChange({ companyName: t }))}
-              {picker(
-                'Category',
-                'categoryId',
-                [...categories]
-                  .sort((a, b) => a.order - b.order)
-                  .map((c) => (
-                    <Chip
-                      key={c.id}
-                      label={c.name}
-                      selected={d.categoryId === c.id}
-                      onPress={() => onChange({ categoryId: c.id })}
-                    />
-                  )),
-              )}
+              {picker('Category', 'categoryId', [
+                ...walk(categories).map((c) => (
+                  <Chip
+                    key={c.id}
+                    label={pathLabel(categories, c.id)}
+                    selected={d.categoryId === c.id}
+                    onPress={() => onChange({ categoryId: c.id })}
+                  />
+                )),
+                <Chip key="+" label="+ New folder" onPress={() => setAddingFolder(true)} />,
+              ])}
+              {addingFolder ? (
+                // New folders from intake go to the top level; they can be moved later in Stock.
+                <CategoryEditor
+                  onDone={(id) => {
+                    setAddingFolder(false);
+                    if (id) onChange({ categoryId: id });
+                  }}
+                />
+              ) : null}
               {picker(
                 'Unit',
                 'unit',

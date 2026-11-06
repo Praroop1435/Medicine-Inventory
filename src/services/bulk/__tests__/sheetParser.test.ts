@@ -1,7 +1,9 @@
 import type { Category } from '@/domain/types';
 import { DATE_CELL, parseSheetRows } from '../sheetParser';
 
-const cats: Category[] = [{ id: 'c1', name: 'Antibiotics', order: 0, lastCheckedAt: null }];
+const cats: Category[] = [
+  { id: 'c1', name: 'Antibiotics', order: 0, lastCheckedAt: null, parentId: null },
+];
 const H = ['category', 'company', 'medicine', 'unit', 'batch', 'expiry', 'qty'];
 
 describe('parseSheetRows', () => {

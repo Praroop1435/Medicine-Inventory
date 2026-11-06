@@ -1,4 +1,5 @@
 import { router } from 'expo-router';
+import { childrenOf } from '@/domain/tree';
 import { useInventory } from '@/features/shared/hooks/useInventory';
 import { useToday } from '@/features/shared/hooks/useToday';
 import { Button, Card, T, tokens } from '@/ui';
@@ -9,9 +10,10 @@ const DAY = 86_400_000;
 export function CheckReminder() {
   const { categories, loading } = useInventory();
   const today = useToday();
-  if (loading || categories.length === 0) return null;
-  // null (never checked) sorts before any timestamp.
-  const c = [...categories].sort(
+  const top = childrenOf(categories, null);
+  if (loading || top.length === 0) return null;
+  // null (never checked) sorts before any timestamp. A top-level check covers its sub-folders.
+  const c = top.sort(
     (a, b) => (a.lastCheckedAt ?? -1) - (b.lastCheckedAt ?? -1) || a.order - b.order,
   )[0];
   const days =

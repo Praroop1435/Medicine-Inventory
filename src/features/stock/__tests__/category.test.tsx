@@ -212,8 +212,8 @@ describe('stock tab', () => {
     await renderRouter(routes(repos), { initialUrl: '/stock' });
     expect(await screen.findByRole('header', { name: 'Stock' })).toBeOnTheScreen();
     const before = await cats(repos, shopId);
-    await fireEvent.press(await screen.findByRole('button', { name: '+ Add category' }));
-    await fireEvent.changeText(screen.getByLabelText('Category name'), 'Eye drops');
+    await fireEvent.press(await screen.findByRole('button', { name: '+ New folder' }));
+    await fireEvent.changeText(screen.getByLabelText('Folder name'), 'Eye drops');
     await fireEvent.press(screen.getByRole('button', { name: 'Save' }));
     expect(await screen.findByRole('button', { name: /^Eye drops,/ })).toBeOnTheScreen();
     const after = await cats(repos, shopId);

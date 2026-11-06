@@ -1,4 +1,5 @@
-import type { Batch, StockEvent } from '@/domain/types';
+import { childrenOf, descendantIds, nextOrder } from '@/domain/tree';
+import type { Batch, Category, StockEvent } from '@/domain/types';
 import { newId } from '@/lib/ids';
 
 export const CATEGORIES = [
@@ -25,6 +26,28 @@ export function checkMerge(fromId: string, intoId: string, all: { id: string }[]
   if (fromId === intoId) throw new Error('cannot merge into the same record');
   if (!all.some((x) => x.id === fromId) || !all.some((x) => x.id === intoId))
     throw new Error('record not found');
+}
+
+/** The only fields a move writes: the new parent and a place at the end of its sibling group. */
+export function moveChange(cats: Category[], id: string, parentId: string | null) {
+  if (!cats.some((c) => c.id === id)) throw new Error('category not found');
+  if (parentId !== null && !cats.some((c) => c.id === parentId))
+    throw new Error('category not found');
+  if (parentId === id || (parentId !== null && descendantIds(cats, id).includes(parentId)))
+    throw new Error('cannot move a folder into itself (cycle)');
+  return {
+    parentId,
+    order: nextOrder(
+      cats.filter((c) => c.id !== id),
+      parentId,
+    ),
+  };
+}
+
+export function checkDeletable(cats: Category[], medicines: { categoryId: string }[], id: string) {
+  if (!cats.some((c) => c.id === id)) throw new Error('category not found');
+  if (childrenOf(cats, id).length > 0 || medicines.some((m) => m.categoryId === id))
+    throw new Error('folder is not empty');
 }
 
 export const eventFor = (

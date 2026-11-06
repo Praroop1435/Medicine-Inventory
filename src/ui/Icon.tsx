@@ -5,6 +5,7 @@ import {
   ChevronUp,
   CircleCheck,
   Check,
+  Ellipsis,
   FileText,
   House,
   Keyboard,
@@ -36,6 +37,7 @@ const icons = {
   tick: Check,
   up: ChevronUp,
   down: ChevronDown,
+  more: Ellipsis,
 } satisfies Record<string, LucideIcon>;
 
 export type IconName = keyof typeof icons;

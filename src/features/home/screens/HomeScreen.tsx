@@ -5,6 +5,7 @@ import { useInventory } from '@/features/shared/hooks/useInventory';
 import { useShop } from '@/features/shared/hooks/useShop';
 import { useToday } from '@/features/shared/hooks/useToday';
 import { searchInventory } from '@/domain/search';
+import { childrenOf } from '@/domain/tree';
 import {
   Card,
   CountStrip,
@@ -75,7 +76,7 @@ export function HomeScreen() {
           )}
           <SectionHeader
             title="Categories"
-            right={loading ? undefined : `All ${categories.length}`}
+            right={loading ? undefined : `All ${childrenOf(categories, null).length}`}
             onRightPress={() => router.push('/stock')}
           />
           <CategoryList limit={5} />

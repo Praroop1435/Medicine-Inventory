@@ -53,6 +53,73 @@ export function runInventoryContract(make: () => Repos): void {
     expect(after.find((c) => c.id === cs[0].id)?.lastCheckedAt).toBe(123);
   });
 
+  describe('folders', () => {
+    const all = () => last<Category[]>((cb) => inv().watchCategories(shopId, cb));
+    const byId = (id: string) => all().find((c) => c.id === id);
+    const folder = (name: string, parentId: string | null, order = 0) =>
+      inv().upsertCategory(shopId, { name, order, lastCheckedAt: null, parentId });
+
+    it('existing categories are top level (parentId null)', () => {
+      expect(all().every((c) => c.parentId === null)).toBe(true);
+    });
+
+    it('upsertCategory stores parentId', async () => {
+      const cough = await folder('Cough', catId);
+      expect(byId(cough)).toMatchObject({ name: 'Cough', parentId: catId });
+    });
+
+    it('moveCategory sets parentId, appends to the new siblings and leaves other fields alone', async () => {
+      const a = await folder('A', catId, 0);
+      const b = await folder('B', catId, 4);
+      const other = all().find((c) => c.parentId === null && c.id !== catId)!;
+      await inv().upsertCategory(shopId, { ...other, lastCheckedAt: 77 });
+      await inv().moveCategory(shopId, other.id, catId, deviceId);
+      expect(byId(other.id)).toMatchObject({
+        parentId: catId,
+        order: 5,
+        name: other.name,
+        lastCheckedAt: 77,
+      });
+      await inv().moveCategory(shopId, b, null, deviceId);
+      expect(byId(b)?.parentId).toBeNull();
+      expect(byId(b)?.order).toBe(
+        Math.max(
+          ...all()
+            .filter((c) => c.id !== b && c.parentId === null)
+            .map((c) => c.order),
+        ) + 1,
+      );
+      expect(byId(a)?.parentId).toBe(catId);
+    });
+
+    it('moveCategory rejects moving into itself or a descendant (depth 3)', async () => {
+      const cough = await folder('Cough', catId);
+      const dry = await folder('Dry', cough);
+      await expect(inv().moveCategory(shopId, catId, catId, deviceId)).rejects.toThrow(/cycle/);
+      await expect(inv().moveCategory(shopId, catId, cough, deviceId)).rejects.toThrow(/cycle/);
+      await expect(inv().moveCategory(shopId, catId, dry, deviceId)).rejects.toThrow(/cycle/);
+      expect(byId(catId)?.parentId).toBeNull();
+      await expect(inv().moveCategory(shopId, 'nope', null, deviceId)).rejects.toThrow(/not found/);
+      await expect(inv().moveCategory(shopId, dry, 'nope', deviceId)).rejects.toThrow(/not found/);
+    });
+
+    it('deleteCategory removes an empty folder', async () => {
+      const cough = await folder('Cough', catId);
+      await inv().deleteCategory(shopId, cough, deviceId);
+      expect(byId(cough)).toBeUndefined();
+    });
+
+    it('deleteCategory rejects a folder with sub-folders or medicines', async () => {
+      await folder('Cough', catId);
+      await expect(inv().deleteCategory(shopId, catId, deviceId)).rejects.toThrow(/not empty/);
+      const other = all().find((c) => c.parentId === null && c.id !== catId)!;
+      await save([draft({ categoryId: other.id })]);
+      await expect(inv().deleteCategory(shopId, other.id, deviceId)).rejects.toThrow(/not empty/);
+      expect(byId(catId)).toBeDefined();
+      expect(byId(other.id)).toBeDefined();
+    });
+  });
+
   it('watchBill returns one bill, null when unknown; added events carry billId', async () => {
     await save([draft({})], {
       supplier: 'S',
@@ -277,6 +344,26 @@ export function runInventoryContract(make: () => Repos): void {
       expect(category().lastCheckedAt).toEqual(expect.any(Number));
       expect(category().name).toBe('Antibiotics');
       expect(session()).toBeNull();
+    });
+
+    it('finishCheck of a parent also marks every sub-folder checked', async () => {
+      const cough = await inv().upsertCategory(shopId, {
+        name: 'Cough',
+        order: 0,
+        lastCheckedAt: null,
+        parentId: catId,
+      });
+      const dry = await inv().upsertCategory(shopId, {
+        name: 'Dry',
+        order: 0,
+        lastCheckedAt: null,
+        parentId: cough,
+      });
+      await expect(r.check.finishCheck(shopId, catId, [])).resolves.toEqual({ complete: true });
+      const cs = last<Category[]>((cb) => inv().watchCategories(shopId, cb));
+      for (const id of [catId, cough, dry])
+        expect(cs.find((c) => c.id === id)?.lastCheckedAt).toEqual(expect.any(Number));
+      expect(cs.filter((c) => c.lastCheckedAt !== null)).toHaveLength(3);
     });
 
     it('finishCheck with rows unchecked keeps the session and lastCheckedAt', async () => {

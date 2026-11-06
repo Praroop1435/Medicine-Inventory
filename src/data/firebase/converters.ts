@@ -1,4 +1,4 @@
-import type { Batch, Device, YearMonth } from '@/domain/types';
+import type { Batch, Category, Device, YearMonth } from '@/domain/types';
 
 // Pure mapping between domain records and Firestore documents. Doc ids are never stored as fields.
 
@@ -34,3 +34,7 @@ export const deviceFromDoc = (id: string, d: DeviceDoc): Device => ({
   joinedAt: d.joinedAt,
   removed: d.removed,
 });
+
+// Category docs written before folders (§11.1) have no parentId: they are top level. No migration write.
+export const categoryFromDoc = (id: string, d: object): Category =>
+  ({ parentId: null, ...d, id }) as Category;

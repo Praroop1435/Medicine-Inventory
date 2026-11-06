@@ -2,40 +2,104 @@ import { router, useLocalSearchParams } from 'expo-router';
 import { useState } from 'react';
 import { medicineSummary } from '@/domain/alerts';
 import { expiryDate, formatExpiry } from '@/domain/expiry';
+import { childrenOf, pathLabel, rollupSummary } from '@/domain/tree';
+import type { Category } from '@/domain/types';
+import { CategoryList } from '@/features/home/components/CategoryList';
 import { useInventory } from '@/features/shared/hooks/useInventory';
 import { useShop } from '@/features/shared/hooks/useShop';
 import { useToday } from '@/features/shared/hooks/useToday';
 import { medicineCount, pluralUnit } from '@/lib/format';
-import { Card, EmptyState, ListRow, Screen, SectionHeader, Skeleton, StatusPill } from '@/ui';
+import {
+  Button,
+  ButtonRow,
+  Card,
+  EmptyState,
+  ListRow,
+  Screen,
+  SectionHeader,
+  Skeleton,
+  StatusPill,
+  tokens,
+} from '@/ui';
+import { View } from 'react-native';
+import { CategoryEditor } from '../components/CategoryEditor';
 import { CompanyChips } from '../components/CompanyChips';
+import { FolderMenu } from '../components/FolderMenu';
 
 const DAY = 86_400_000;
 
 export function CategoryScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
+  return <FolderScreen id={id} />;
+}
+
+/** A folder (§11.1): its sub-folders, then its own medicines. `id` null is the Stock tab (top level). */
+export function FolderScreen({ id }: { id: string | null }) {
   const { categories, medicines, batches, companies, loading } = useInventory();
   const shop = useShop();
   const today = useToday();
   const [company, setCompany] = useState<string | null>(null);
+  const [adding, setAdding] = useState(false);
+  const [editing, setEditing] = useState(false);
+  const [menuFor, setMenuFor] = useState<Category | null>(null);
   const category = categories.find((c) => c.id === id);
+  const parent = categories.find((c) => c.id === category?.parentId);
+  const back = id === null ? undefined : parent ? parent.name : 'Stock';
 
   if (loading || !shop)
     return (
-      <Screen back="Stock">
+      <Screen back={back}>
         <Skeleton />
       </Screen>
     );
-  if (!category)
+  if (id !== null && !category)
     return (
-      <Screen back="Stock">
+      <Screen back={back}>
         <EmptyState title="Category not found" />
+      </Screen>
+    );
+
+  const folders = childrenOf(categories, id);
+  const folderSection = (
+    <>
+      {folders.length > 0 && (
+        <SectionHeader
+          title={id === null ? 'Categories' : 'Folders'}
+          right={folders.length > 1 ? (editing ? 'Done' : 'Edit order') : undefined}
+          onRightPress={() => setEditing((e) => !e)}
+        />
+      )}
+      <CategoryList parentId={id} editable={editing} onMenu={setMenuFor} />
+      {menuFor && <FolderMenu folder={menuFor} onClose={() => setMenuFor(null)} />}
+    </>
+  );
+  const newFolder = (
+    <View style={{ paddingTop: tokens.space[4] }}>
+      {adding ? (
+        <Card>
+          <View style={{ padding: tokens.space[4] }}>
+            <CategoryEditor parentId={id} onDone={() => setAdding(false)} />
+          </View>
+        </Card>
+      ) : (
+        <ButtonRow>
+          <Button label="+ New folder" variant="secondary" onPress={() => setAdding(true)} />
+        </ButtonRow>
+      )}
+    </View>
+  );
+  if (id === null || !category)
+    return (
+      <Screen title="Stock">
+        {folderSection}
+        {newFolder}
       </Screen>
     );
 
   const all = medicines
     .filter((m) => m.categoryId === id)
     .map((m) => ({ m, s: medicineSummary(m.id, batches, today, shop.alertDays) }));
-  const units = all.reduce((n, r) => n + r.s.qty, 0);
+  const total = rollupSummary(categories, medicines, batches, category.id, today, shop.alertDays);
   const checked =
     category.lastCheckedAt === null
       ? 'never checked'
@@ -78,11 +142,16 @@ export function CategoryScreen() {
 
   return (
     <Screen
-      title={category.name}
-      meta={`${medicineCount(all.length)} · ${units} units · ${checked}`}
-      back="Stock"
+      title={pathLabel(categories, category.id)}
+      meta={`${medicineCount(total.medicineCount)} · ${total.unitCount} units · ${checked}`}
+      back={back}
     >
-      <CompanyChips companies={present} selected={company} onSelect={setCompany} />
+      {folderSection}
+      {all.length > 0 && (
+        <View style={{ paddingTop: folders.length ? tokens.space[4] : 0 }}>
+          <CompanyChips companies={present} selected={company} onSelect={setCompany} />
+        </View>
+      )}
       {needs.length > 0 && (
         <>
           <SectionHeader title="Needs action" />
@@ -95,7 +164,8 @@ export function CategoryScreen() {
           <Card>{good.map(row)}</Card>
         </>
       )}
-      {shown.length === 0 && <EmptyState title="No medicines yet" />}
+      {shown.length === 0 && folders.length === 0 && <EmptyState title="No medicines yet" />}
+      {newFolder}
     </Screen>
   );
 }

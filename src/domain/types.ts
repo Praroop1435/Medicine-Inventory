@@ -12,7 +12,14 @@ export type Shop = {
   joinSecret: string;
 };
 export type Device = { id: string; displayName: string; joinedAt: number; removed: boolean };
-export type Category = { id: string; name: string; order: number; lastCheckedAt: number | null };
+export type Category = {
+  id: string;
+  name: string;
+  order: number;
+  lastCheckedAt: number | null;
+  /** null = top level. A folder holds sub-folders and medicines at once (§11.1). */
+  parentId: string | null;
+};
 export type Company = { id: string; name: string };
 export type Medicine = {
   id: string;

@@ -10,14 +10,17 @@ type Props = {
   right?: ReactNode;
   chevron?: boolean;
   onPress?: () => void;
+  /** Shown dimmed and not pressable, e.g. a menu item that can't be used yet. */
+  disabled?: boolean;
 };
 
-export function ListRow({ title, subtitle, right, chevron, onPress }: Props) {
+export function ListRow({ title, subtitle, right, chevron, onPress, disabled }: Props) {
   return (
     <Pressable
       accessibilityRole={onPress ? 'button' : undefined}
       accessibilityLabel={subtitle ? `${title}, ${subtitle}` : title}
-      disabled={!onPress}
+      accessibilityState={onPress ? { disabled: !!disabled } : undefined}
+      disabled={!onPress || disabled}
       onPress={onPress}
       style={({ pressed }) => ({
         minHeight: tokens.row,
@@ -28,7 +31,7 @@ export function ListRow({ title, subtitle, right, chevron, onPress }: Props) {
         paddingVertical: tokens.space[2],
         borderBottomWidth: 1,
         borderBottomColor: tokens.color.rule,
-        opacity: pressed ? 0.7 : 1,
+        opacity: disabled ? tokens.opacity.disabled : pressed ? tokens.opacity.pressed : 1,
       })}
     >
       <View style={{ flex: 1 }}>
