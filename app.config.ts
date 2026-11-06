@@ -3,7 +3,10 @@ import { readConfig } from './src/lib/config.ts';
 
 // The EAS project id is public (not a secret); default it so eas-cli works without a .env.
 const EAS_PROJECT_ID = '8b476ffd-e696-417e-ba48-61651fe305ec';
-const cfg = readConfig({ ...process.env, EAS_PROJECT_ID: process.env.EAS_PROJECT_ID || EAS_PROJECT_ID });
+const cfg = readConfig({
+  ...process.env,
+  EAS_PROJECT_ID: process.env.EAS_PROJECT_ID || EAS_PROJECT_ID,
+});
 
 const expoConfig: ExpoConfig = {
   name: cfg.appName,
@@ -31,7 +34,7 @@ const expoConfig: ExpoConfig = {
     '@react-native-firebase/auth',
     'expo-secure-store',
     'expo-sharing',
-    'expo-notifications',
+    ['expo-notifications', { icon: './assets/images/notification-icon.png', color: '#26344E' }],
     ['expo-speech-recognition', { microphonePermission: 'Used to add stock by voice' }],
     ['expo-image-picker', { photosPermission: 'Used to pick a photo of a bill.' }],
     ['expo-camera', { cameraPermission: 'Used to scan the shop QR code and bills.' }],

@@ -3,6 +3,7 @@ import { useEffect } from 'react';
 import { alertCounts } from '@/domain/alerts';
 import { shopNightTime } from '@/domain/types';
 import { dailyMessage, dueCategory, nightReminder } from '@/services/notifications/message';
+import { useSession } from '@/features/onboarding/SessionContext';
 import { useNotifier } from '../NotifierContext';
 import { useInventory } from './useInventory';
 import { useShop } from './useShop';
@@ -14,6 +15,7 @@ const ignore = () => {};
 /** Keeps the morning expiry alert and the night stock reminder in step with the shop. Mount once. */
 export function useDailyAlert() {
   const notifier = useNotifier();
+  const { session } = useSession();
   const shop = useShop();
   const { batches, categories, loading } = useInventory();
   const today = useToday();
@@ -31,6 +33,13 @@ export function useDailyAlert() {
   const nightUrl = due ? `/check/${due.id}` : '/check';
   const notifyTime = shop?.notifyTime;
   const nightTime = shop && shopNightTime(shop);
+
+  // No shop on this phone (left or never joined): no reminders for it.
+  useEffect(() => {
+    if (session) return;
+    notifier.cancel('morning').catch(ignore);
+    notifier.cancel('night').catch(ignore);
+  }, [notifier, session]);
 
   // Strings only, so a new snapshot with the same text doesn't reschedule.
   useEffect(() => {

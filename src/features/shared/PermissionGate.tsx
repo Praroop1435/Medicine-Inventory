@@ -22,6 +22,7 @@ export function usePermissionStatus(source: Permission) {
 export type PermissionGate = {
   /** ask = show the one-line reason first (§11.6); off = refused, point to Android settings. */
   state: 'loading' | 'granted' | 'ask' | 'off';
+  /** Asks the OS; when 'off' and the OS still says no, opens Android settings. */
   allow(): Promise<void>;
 };
 
@@ -45,11 +46,14 @@ export function usePermissionGate(kind: 'camera' | 'mic', source: Permission): P
         : seen
           ? 'off'
           : 'ask';
+  // From 'off', ask the OS again first: Android may still show its prompt. Settings only if it won't.
   const allow = async () => {
+    const off = state === 'off';
     setSeen(true);
     await SecureStore.setItemAsync(key, '1').catch(() => {});
     const ok = await source.requestPermission().catch(() => false);
     setStatus(ok ? 'granted' : 'denied');
+    if (!ok && off) void Linking.openSettings();
   };
   return { state, allow };
 }
@@ -71,10 +75,7 @@ export function PermissionPrompt({
       <T size={14} color={tokens.color.muted}>
         {ask ? reason : off}
       </T>
-      <Button
-        label={ask ? 'Continue' : 'Open settings'}
-        onPress={ask ? gate.allow : () => void Linking.openSettings()}
-      />
+      <Button label={ask ? 'Continue' : 'Open settings'} onPress={gate.allow} />
     </View>
   );
 }

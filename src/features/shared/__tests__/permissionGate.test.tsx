@@ -62,7 +62,21 @@ describe('permission gate', () => {
     expect(await screen.findByText('Camera permission is off.')).toBeOnTheScreen();
     expect(screen.queryByText('Used to photograph bills.')).toBeNull();
     await fireEvent.press(screen.getByRole('button', { name: 'Open settings' }));
+    // Asks the OS again first; settings only because it still says no.
+    expect(source.requestPermission).toHaveBeenCalledTimes(2);
     expect(open).toHaveBeenCalled();
+  });
+
+  it('Open settings re-requests first and skips settings when the OS now allows it', async () => {
+    const open = jest.spyOn(Linking, 'openSettings').mockResolvedValue();
+    open.mockClear(); // Linking is already a jest mock, so restoreAllMocks keeps its old calls
+    mockStore.set('permission-seen-camera', '1');
+    const source = fake('denied', true);
+    await render(<Host source={source} />);
+    await fireEvent.press(await screen.findByRole('button', { name: 'Open settings' }));
+    expect(await screen.findByText('Camera on')).toBeOnTheScreen();
+    expect(source.requestPermission).toHaveBeenCalledTimes(1);
+    expect(open).not.toHaveBeenCalled();
   });
 
   it('goes straight to the feature when already allowed', async () => {

@@ -159,6 +159,24 @@ describe('useDailyAlert', () => {
     expect(f.scheduled.has('night')).toBe(true);
   });
 
+  it('cancels both reminders when there is no shop on this phone', async () => {
+    const repos = createMemoryRepos(() => TODAY.getTime());
+    const f = fakeNotifier();
+    await renderRouter(
+      {
+        _layout: () => <AppShell repos={repos} notifier={f.notifier} />,
+        '(tabs)/_layout': TabsLayout,
+        '(tabs)/index': () => <T>Home stub</T>,
+        'onboarding/index': () => <T>Welcome stub</T>,
+      },
+      { initialUrl: '/' },
+    );
+    expect(await screen.findByText('Welcome stub')).toBeOnTheScreen();
+    await waitFor(() => expect(f.notifier.cancel).toHaveBeenCalledWith('morning'));
+    expect(f.notifier.cancel).toHaveBeenCalledWith('night');
+    expect(f.notifier.scheduleDaily).not.toHaveBeenCalled();
+  });
+
   it('opens the screen a tapped reminder points to', async () => {
     const { repos } = await seed();
     const f = fakeNotifier();

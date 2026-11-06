@@ -23,6 +23,8 @@ const ensureChannel = () =>
     importance: AndroidImportance.DEFAULT,
   }));
 
+let lastTap = '';
+
 export const expoNotifier: Notifier = {
   getPermission: async () => (await N.getPermissionsAsync()).status as PermissionStatus,
   async requestPermission() {
@@ -42,6 +44,10 @@ export const expoNotifier: Notifier = {
   onTap(cb) {
     const open = (r: N.NotificationResponse | null) => {
       if (!r) return;
+      // On a cold start the same tap can arrive as the last response and through the listener.
+      const key = `${r.notification.request.identifier}@${r.notification.date}`;
+      if (key === lastTap) return;
+      lastTap = key;
       N.clearLastNotificationResponse(); // so a remount doesn't open it again
       cb(r.notification.request.content.data as Record<string, string>);
     };
