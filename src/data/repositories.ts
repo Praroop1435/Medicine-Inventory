@@ -60,6 +60,8 @@ export interface InventoryRepo {
   ): Promise<void>;
   markReturned(shopId: string, batchId: string, deviceId: string): Promise<void>;
   upsertCategory(shopId: string, c: Omit<Category, 'id'> & { id?: string }): Promise<string>;
+  /** Sets order = index for each id, touching only `order`, atomically. */
+  reorderCategories(shopId: string, orderedIds: string[], deviceId: string): Promise<void>;
   renameCompany(shopId: string, companyId: string, name: string): Promise<void>;
   mergeCompanies(shopId: string, fromId: string, intoId: string): Promise<void>; // repoints medicines, deletes fromId
   mergeCategories(shopId: string, fromId: string, intoId: string): Promise<void>;

@@ -1,6 +1,6 @@
 import { fireEvent, render, screen } from '@testing-library/react-native';
 import { StyleSheet, Text } from 'react-native';
-import { Button, ButtonRow, CountStrip, Field, StatusPill, Stepper } from '@/ui';
+import { Button, ButtonRow, CountStrip, Field, IconButton, StatusPill, Stepper } from '@/ui';
 
 const flat = (el: { props: { style?: unknown } }) =>
   StyleSheet.flatten(el.props.style as never) as Record<string, unknown>;
@@ -90,5 +90,16 @@ describe('CountStrip', () => {
     expect(flat(screen.getByText('3')).color).toBe('#c4242a');
     await fireEvent.press(screen.getByText('Soon'));
     expect(onPress).toHaveBeenCalledWith(1);
+  });
+});
+
+describe('IconButton', () => {
+  it('is a labelled button that reports disabled and ignores presses', async () => {
+    const onPress = jest.fn();
+    await render(<IconButton icon="up" label="Move up" disabled onPress={onPress} />);
+    const b = screen.getByRole('button', { name: 'Move up' });
+    expect(b).toBeDisabled();
+    await fireEvent.press(b);
+    expect(onPress).not.toHaveBeenCalled();
   });
 });

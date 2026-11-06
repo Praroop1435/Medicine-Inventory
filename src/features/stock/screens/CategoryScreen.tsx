@@ -5,7 +5,7 @@ import { expiryDate, formatExpiry } from '@/domain/expiry';
 import { useInventory } from '@/features/shared/hooks/useInventory';
 import { useShop } from '@/features/shared/hooks/useShop';
 import { useToday } from '@/features/shared/hooks/useToday';
-import { pluralUnit } from '@/lib/format';
+import { medicineCount, pluralUnit } from '@/lib/format';
 import { Card, EmptyState, ListRow, Screen, SectionHeader, Skeleton, StatusPill } from '@/ui';
 import { CompanyChips } from '../components/CompanyChips';
 
@@ -79,7 +79,7 @@ export function CategoryScreen() {
   return (
     <Screen
       title={category.name}
-      meta={`${all.length} medicines · ${units} units · ${checked}`}
+      meta={`${medicineCount(all.length)} · ${units} units · ${checked}`}
       back="Stock"
     >
       <CompanyChips companies={present} selected={company} onSelect={setCompany} />

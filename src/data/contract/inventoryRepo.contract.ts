@@ -41,6 +41,18 @@ export function runInventoryContract(make: () => Repos): void {
     catId = last<Category[]>((cb) => inv().watchCategories(shopId, cb))[0].id;
   });
 
+  it('reorderCategories renumbers 0..n-1 and leaves other fields alone', async () => {
+    const cs = last<Category[]>((cb) => inv().watchCategories(shopId, cb));
+    await inv().upsertCategory(shopId, { ...cs[0], lastCheckedAt: 123 });
+    const ids = cs.map((c) => c.id).reverse();
+    await inv().reorderCategories(shopId, ids, deviceId);
+    const after = last<Category[]>((cb) => inv().watchCategories(shopId, cb));
+    const byOrder = [...after].sort((a, b) => a.order - b.order);
+    expect(byOrder.map((c) => c.id)).toEqual(ids);
+    expect(byOrder.map((c) => c.order)).toEqual(ids.map((_, i) => i));
+    expect(after.find((c) => c.id === cs[0].id)?.lastCheckedAt).toBe(123);
+  });
+
   it('seeds categories and defaults', () => {
     const cs = last<Category[]>((cb) => inv().watchCategories(shopId, cb));
     expect(cs.map((c) => c.name)).toEqual([

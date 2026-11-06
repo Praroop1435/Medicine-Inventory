@@ -329,6 +329,11 @@ export function createFirebaseRepos(opts: { onWriteError?: (e: Error) => void } 
         write((wb) => wb.set(ref(shopId, 'categories', id), withoutId({ ...c, id })));
         return id;
       },
+      async reorderCategories(shopId, orderedIds) {
+        write((wb) =>
+          orderedIds.forEach((id, order) => wb.update(ref(shopId, 'categories', id), { order })),
+        );
+      },
       renameCompany: async (shopId, companyId, name) =>
         update(ref(shopId, 'companies', companyId), { name: name.trim() }),
       mergeCompanies: (shopId, fromId, intoId) =>

@@ -1,13 +1,14 @@
 import { router } from 'expo-router';
-import { Pressable, View } from 'react-native';
+import { View } from 'react-native';
 import { categorySummary } from '@/domain/alerts';
 import type { BatchStatus } from '@/domain/types';
 import { useRepos } from '@/data/RepoContext';
 import { useSession } from '@/features/onboarding/SessionContext';
+import { medicineCount } from '@/lib/format';
 import { useInventory } from '@/features/shared/hooks/useInventory';
 import { useShop } from '@/features/shared/hooks/useShop';
 import { useToday } from '@/features/shared/hooks/useToday';
-import { Card, Icon, ListRow, Skeleton, StatusPill, tokens } from '@/ui';
+import { Card, IconButton, ListRow, Skeleton, StatusPill } from '@/ui';
 
 const label = (worst: BatchStatus | null, n: number, first: number) =>
   worst === 'expired' ? `${n} expired` : worst === 'soon' ? `${n} soon` : `${n} in ${first} days`;
@@ -16,7 +17,7 @@ const label = (worst: BatchStatus | null, n: number, first: number) =>
 export function CategoryList({ limit, editable }: { limit?: number; editable?: boolean }) {
   const { categories, medicines, batches, loading } = useInventory();
   const { inventory } = useRepos();
-  const shopId = useSession().session?.shopId;
+  const { session } = useSession();
   const shop = useShop();
   const today = useToday();
   if (loading || !shop)
@@ -27,14 +28,14 @@ export function CategoryList({ limit, editable }: { limit?: number; editable?: b
         <Skeleton />
       </Card>
     );
-  const rows = [...categories].sort((a, b) => a.order - b.order).slice(0, limit);
-  // Swap `order` with the neighbour; shopId is set whenever shop is.
+  const sorted = [...categories].sort((a, b) => a.order - b.order || a.name.localeCompare(b.name));
+  const rows = sorted.slice(0, limit);
+  // Renumbers the whole list so duplicate `order` values still move.
   const move = (i: number, d: -1 | 1) => {
-    const a = rows[i];
-    const b = rows[i + d];
-    if (!shopId || !a || !b) return;
-    void inventory.upsertCategory(shopId, { ...a, order: b.order });
-    void inventory.upsertCategory(shopId, { ...b, order: a.order });
+    if (!session || !sorted[i + d]) return;
+    const ids = sorted.map((c) => c.id);
+    [ids[i], ids[i + d]] = [ids[i + d], ids[i]];
+    void inventory.reorderCategories(session.shopId, ids, session.deviceId);
   };
   return (
     <Card>
@@ -44,27 +45,18 @@ export function CategoryList({ limit, editable }: { limit?: number; editable?: b
           <ListRow
             key={c.id}
             title={c.name}
-            subtitle={`${s.medicineCount} medicines · ${s.unitCount} units`}
+            subtitle={`${medicineCount(s.medicineCount)} · ${s.unitCount} units`}
             right={
               editable ? (
                 <View style={{ flexDirection: 'row' }}>
                   {([-1, 1] as const).map((d) => (
-                    <Pressable
+                    <IconButton
                       key={d}
-                      accessibilityRole="button"
-                      accessibilityLabel={`Move ${c.name} ${d < 0 ? 'up' : 'down'}`}
+                      icon={d < 0 ? 'up' : 'down'}
+                      label={`Move ${c.name} ${d < 0 ? 'up' : 'down'}`}
                       disabled={i + d < 0 || i + d >= rows.length}
                       onPress={() => move(i, d)}
-                      style={({ pressed }) => ({
-                        width: tokens.touch,
-                        height: tokens.touch,
-                        alignItems: 'center',
-                        justifyContent: 'center',
-                        opacity: i + d < 0 || i + d >= rows.length ? 0.3 : pressed ? 0.7 : 1,
-                      })}
-                    >
-                      <Icon name={d < 0 ? 'up' : 'down'} />
-                    </Pressable>
+                    />
                   ))}
                 </View>
               ) : s.worst && s.worst !== 'ok' ? (

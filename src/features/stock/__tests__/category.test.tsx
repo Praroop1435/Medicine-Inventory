@@ -3,7 +3,7 @@ import { fireEvent, renderRouter, screen, within } from 'expo-router/testing-lib
 import { createMemoryRepos } from '@/data/memory/createMemoryRepos';
 import type { Repos } from '@/data/repositories';
 import { emptyDraft } from '@/domain/draft';
-import type { Category, Unit } from '@/domain/types';
+import type { Batch, Category, Unit } from '@/domain/types';
 import { AppShell } from '@/features/shared/AppShell';
 import { ToastProvider } from '@/features/shared/Toast';
 import TabsLayout from '../../../../app/(tabs)/_layout';
@@ -51,6 +51,7 @@ const ROWS: Row[] = [
   ['Antibiotics', 'Althrocin', 'Alembic', 'A4', 2028, 12, 3, 'carton'],
   ['Antibiotics', 'Althrocin', 'Alembic', 'A5', 2028, 11, 2, 'carton'],
   ['Balms', 'Volini', 'Sun', 'B1', 2028, 1, 2, 'tube'],
+  ['Antibiotics', 'Zerodol', 'Alkem', 'Z1', 2029, 1, 1, 'carton'],
 ];
 
 async function seed(checked: number | null = 18) {
@@ -79,6 +80,10 @@ async function seed(checked: number | null = 18) {
       deviceId,
     );
   }
+  // Sell the single Zerodol carton so it has no live stock.
+  let live: Batch[] = [];
+  repos.inventory.watchLiveBatches(shopId, (b) => (live = b))();
+  await repos.inventory.sellOne(shopId, live.find((b) => b.batchNo === 'Z1')!.id, deviceId);
   const anti = cats.find((c) => c.name === 'Antibiotics')!;
   await repos.inventory.upsertCategory(shopId, {
     ...anti,
@@ -132,18 +137,24 @@ describe('category screen', () => {
   it('shows computed meta', async () => {
     await open();
     expect(
-      await screen.findByText('4 medicines · 14 units · checked 18 days ago'),
+      await screen.findByText('5 medicines · 14 units · checked 18 days ago'),
     ).toBeOnTheScreen();
   });
 
   it('says never checked / checked today', async () => {
     await open(null);
-    expect(await screen.findByText('4 medicines · 14 units · never checked')).toBeOnTheScreen();
+    expect(await screen.findByText('5 medicines · 14 units · never checked')).toBeOnTheScreen();
+  });
+
+  it('singularises 1 medicine', async () => {
+    const { repos, id } = await seed();
+    await renderRouter(routes(repos), { initialUrl: `/category/${id('Balms')}` });
+    expect(await screen.findByText('1 medicine · 2 units · never checked')).toBeOnTheScreen();
   });
 
   it('checked today when 0 days', async () => {
     await open(0);
-    expect(await screen.findByText('4 medicines · 14 units · checked today')).toBeOnTheScreen();
+    expect(await screen.findByText('5 medicines · 14 units · checked today')).toBeOnTheScreen();
   });
 
   it('offers All companies plus this category companies only', async () => {
@@ -159,14 +170,18 @@ describe('category screen', () => {
     await screen.findByRole('header', { name: 'NEEDS ACTION' });
     expect(screen.getByRole('header', { name: 'ALL GOOD' })).toBeOnTheScreen();
     const names = screen
-      .getAllByRole('button', { name: /^(Amoxil|Azithral|Zox|Althrocin),/ })
+      .getAllByRole('button', { name: /^(Amoxil|Azithral|Zox|Althrocin|Zerodol),/ })
       .map((n) => n.props.accessibilityLabel);
     expect(names).toEqual([
       'Azithral, Alembic · 2 cartons',
       'Amoxil, Cipla · 4 cartons',
       'Zox, Cipla · 3 cartons',
       'Althrocin, Alembic · 5 cartons · 2 batches',
+      'Zerodol, Alkem · out of stock',
     ]);
+    expect(
+      within(screen.getByRole('button', { name: /^Zerodol,/ })).queryByTestId('status-pill'),
+    ).toBeNull();
     const az = within(screen.getByRole('button', { name: /^Azithral,/ }));
     expect(az.getByText('Expired 30 Sep')).toBeOnTheScreen();
     expect(
@@ -208,15 +223,39 @@ describe('stock tab', () => {
     });
   });
 
-  it('reorders and persists order', async () => {
+  it('reorders up and down and persists order', async () => {
     const { repos, shopId } = await seed();
     await renderRouter(routes(repos), { initialUrl: '/stock' });
-    const [a, b] = await cats(repos, shopId);
+    const [a, b, c] = await cats(repos, shopId);
     await fireEvent.press(await screen.findByRole('button', { name: 'Edit order' }));
     await fireEvent.press(screen.getByRole('button', { name: `Move ${b.name} up` }));
-    const [x, y] = await cats(repos, shopId);
-    expect([x.id, y.id]).toEqual([b.id, a.id]);
+    expect((await cats(repos, shopId)).slice(0, 3).map((x) => x.id)).toEqual([b.id, a.id, c.id]);
+    await fireEvent.press(screen.getByRole('button', { name: `Move ${b.name} down` }));
+    expect((await cats(repos, shopId)).slice(0, 3).map((x) => x.id)).toEqual([a.id, b.id, c.id]);
     await fireEvent.press(screen.getByRole('button', { name: 'Done' }));
     expect(screen.queryByRole('button', { name: `Move ${b.name} up` })).toBeNull();
+  });
+
+  it('disables Up on the first row and Down on the last', async () => {
+    const { repos, shopId } = await seed();
+    await renderRouter(routes(repos), { initialUrl: '/stock' });
+    const all = await cats(repos, shopId);
+    await fireEvent.press(await screen.findByRole('button', { name: 'Edit order' }));
+    expect(screen.getByRole('button', { name: `Move ${all[0].name} up` })).toBeDisabled();
+    expect(screen.getByRole('button', { name: `Move ${all.at(-1)!.name} down` })).toBeDisabled();
+  });
+
+  it('moves a row even when order values are duplicated', async () => {
+    const { repos, shopId } = await seed();
+    for (const c of await cats(repos, shopId))
+      await repos.inventory.upsertCategory(shopId, { ...c, order: 0 });
+    await renderRouter(routes(repos), { initialUrl: '/stock' });
+    const [a, b] = (await cats(repos, shopId)).sort((x, y) => x.name.localeCompare(y.name));
+    await fireEvent.press(await screen.findByRole('button', { name: 'Edit order' }));
+    await fireEvent.press(screen.getByRole('button', { name: `Move ${b.name} up` }));
+    const after = await cats(repos, shopId);
+    expect(after[0].id).toBe(b.id);
+    expect(after[1].id).toBe(a.id);
+    expect(after.map((x) => x.order)).toEqual(after.map((_, i) => i));
   });
 });

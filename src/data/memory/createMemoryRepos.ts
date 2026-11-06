@@ -191,6 +191,14 @@ export function createMemoryRepos(now: () => number = Date.now): Repos {
         notify();
         return id;
       },
+      reorderCategories: (shopId, orderedIds, deviceId) =>
+        write(shopId, deviceId, (s) => {
+          orderedIds.forEach((id, order) => {
+            const c = s.categories.find((x) => x.id === id);
+            if (!c) throw new Error('category not found');
+            c.order = order;
+          });
+        }),
       async renameCompany(shopId, companyId, name) {
         const co = get(shopId).companies.find((c) => c.id === companyId);
         if (!co) throw new Error('company not found');

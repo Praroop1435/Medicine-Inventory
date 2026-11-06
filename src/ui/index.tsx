@@ -19,6 +19,7 @@ export { ProgressBar } from './ProgressBar';
 export { EmptyState } from './EmptyState';
 export { ErrorState } from './ErrorState';
 export { Skeleton } from './Skeleton';
+export { IconButton } from './IconButton';
 export { Icon } from './Icon';
 export type { IconName } from './Icon';
 export { T } from './Text';

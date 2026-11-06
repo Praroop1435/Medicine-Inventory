@@ -26,6 +26,7 @@ export const tokens = {
   font: { 12: 12, 14: 14, 16: 16, 20: 20, 24: 24 },
   family: { regular: 'Geist_400Regular', medium: 'Geist_500Medium', semibold: 'Geist_600SemiBold' },
   touch: 44,
+  opacity: { pressed: 0.7, disabled: 0.4 },
   row: 56,
   labelCol: 72,
   margin: 16,
