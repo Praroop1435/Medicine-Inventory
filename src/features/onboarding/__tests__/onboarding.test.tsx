@@ -15,6 +15,9 @@ import Welcome from '../../../../app/onboarding/index';
 import Setup from '../../../../app/onboarding/setup';
 import Qr from '../../../../app/onboarding/qr';
 import Name from '../../../../app/onboarding/name';
+import Notify from '../../../../app/onboarding/notify';
+import type { Notifier } from '@/services/notifications/Notifier';
+import { silentNotifier } from '@/services/notifications/Notifier';
 
 const mockStore = new Map<string, string>();
 jest.mock('expo-secure-store', () => ({
@@ -23,10 +26,10 @@ jest.mock('expo-secure-store', () => ({
   deleteItemAsync: async (k: string) => void mockStore.delete(k),
 }));
 
-const routes = (repos: Repos, scanned = '') => ({
+const routes = (repos: Repos, scanned = '', notifier: Notifier = silentNotifier) => ({
   _layout: () => (
     <ToastProvider>
-      <AppShell repos={repos} />
+      <AppShell repos={repos} notifier={notifier} />
     </ToastProvider>
   ),
   '(tabs)/_layout': TabsLayout,
@@ -39,7 +42,12 @@ const routes = (repos: Repos, scanned = '') => ({
   'onboarding/qr': Qr,
   'onboarding/join': () => <JoinScreen scanned={scanned} />,
   'onboarding/name': Name,
+  'onboarding/notify': Notify,
 });
+
+const askNotifier = () => ({ ...silentNotifier, requestPermission: jest.fn(async () => true) });
+const NOTIFY_TEXT =
+  'Get a morning alert when medicines are expiring, and a night reminder to update stock.';
 
 const devices = (repos: Repos, shopId: string) => {
   let out: Device[] = [];
@@ -51,9 +59,10 @@ beforeEach(() => mockStore.clear());
 afterEach(() => jest.restoreAllMocks());
 
 describe('onboarding', () => {
-  it('sets up a shop, holds on the QR screen until "I saved it", then shows the tabs', async () => {
+  it('sets up a shop, holds on the QR screen until "I saved it", asks for notifications, then shows the tabs', async () => {
     const repos = createMemoryRepos();
-    const r = await renderRouter(routes(repos), { initialUrl: '/' });
+    const notifier = askNotifier();
+    const r = await renderRouter(routes(repos, '', notifier), { initialUrl: '/' });
 
     await fireEvent.press(await screen.findByRole('button', { name: 'Set up shop' }));
     await fireEvent.changeText(screen.getByLabelText('Shop name'), 'Anand Medicals');
@@ -70,25 +79,34 @@ describe('onboarding', () => {
     expect(screen.queryByRole('header', { name: 'Anand Medicals' })).toBeNull();
 
     await fireEvent.press(screen.getByRole('button', { name: 'I saved it' }));
+    expect(await screen.findByText(NOTIFY_TEXT)).toBeOnTheScreen();
+    expect(r.getPathname()).toBe('/onboarding/notify');
+    expect(notifier.requestPermission).not.toHaveBeenCalled();
+    await fireEvent.press(screen.getByRole('button', { name: 'Allow notifications' }));
     expect(await screen.findByRole('header', { name: 'Anand Medicals' })).toBeOnTheScreen();
+    expect(notifier.requestPermission).toHaveBeenCalledTimes(1);
 
     const session = JSON.parse(mockStore.get('session') ?? 'null');
     expect(session).toMatchObject({ displayName: 'Priya' });
     expect(devices(repos, session.shopId).map((d) => d.displayName)).toEqual(['Priya']);
   });
 
-  it('joins a shop from a scanned QR, asks the name, then shows the tabs', async () => {
+  it('joins a shop from a scanned QR, asks the name and notifications, then shows the tabs', async () => {
     const repos = createMemoryRepos();
     const { shopId, joinSecret } = await repos.shop.createShop('Anand Medicals', 'Priya');
     const payload = JSON.stringify({ v: 1, shopId, joinSecret });
-    await renderRouter(routes(repos, payload), { initialUrl: '/onboarding' });
+    const notifier = askNotifier();
+    await renderRouter(routes(repos, payload, notifier), { initialUrl: '/onboarding' });
 
     await fireEvent.press(await screen.findByRole('button', { name: 'Join shop' }));
     await fireEvent.changeText(await screen.findByLabelText('Your name'), 'Ravi');
     await fireEvent.press(screen.getByRole('button', { name: 'Join' }));
+    expect(await screen.findByText(NOTIFY_TEXT)).toBeOnTheScreen();
+    await fireEvent.press(screen.getByRole('button', { name: 'Not now' }));
 
     expect(await screen.findByRole('header', { name: 'Anand Medicals' })).toBeOnTheScreen();
     expect(devices(repos, shopId).map((d) => d.displayName)).toEqual(['Priya', 'Ravi']);
+    expect(notifier.requestPermission).not.toHaveBeenCalled();
     expect(JSON.parse(mockStore.get('session') ?? 'null')).toMatchObject({
       shopId,
       displayName: 'Ravi',

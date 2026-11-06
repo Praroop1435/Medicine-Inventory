@@ -29,7 +29,7 @@ export function QrScreen() {
       footer={
         <ButtonRow>
           <Button label="Save QR image" variant="secondary" onPress={save} />
-          <Button label="I saved it" onPress={() => resetTo('/')} />
+          <Button label="I saved it" onPress={() => resetTo('/onboarding/notify')} />
         </ButtonRow>
       }
     >

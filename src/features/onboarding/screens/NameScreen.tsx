@@ -24,7 +24,7 @@ export function NameScreen() {
       const name = displayName.trim();
       const { deviceId } = await shop.joinShop(payload.shopId, payload.joinSecret, name);
       await setSession({ shopId: payload.shopId, deviceId, displayName: name });
-      resetTo('/');
+      resetTo('/onboarding/notify');
     } catch (e) {
       setError((e as Error).message);
       setBusy(false);
