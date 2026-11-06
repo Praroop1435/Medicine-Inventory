@@ -31,6 +31,8 @@ export const SILENCE_MS = 2000;
 /** Before anything is heard, give up after this long so the mic is never left open. */
 export const NO_SPEECH_MS = 8000;
 
+const EXAMPLE = 'Azithral 500, Alembic, batch A Z 8 8, expiry November 2026, 10 strips';
+
 type Phase = 'idle' | 'starting' | 'listening' | 'stopping';
 
 /** Tap to start, tap (or pause) to stop; check what was heard, add it, then review them all. */
@@ -45,6 +47,7 @@ export function VoiceScreen({ engine = nativeSpeechEngine }: { engine?: SpeechEn
   const [heard, setHeard] = useState<DraftBatch | null>(null);
   const [list, setList] = useState<DraftBatch[]>([]);
   const [listening, setListening] = useState(false);
+  const [note, setNote] = useState('');
   // Refs, not state: taps and engine callbacks land between renders.
   const phase = useRef<Phase>('idle');
   const stopWanted = useRef(false);
@@ -60,33 +63,46 @@ export function VoiceScreen({ engine = nativeSpeechEngine }: { engine?: SpeechEn
     if (timer.current) clearTimeout(timer.current);
     timer.current = null;
   };
+  const NOT_HEARD = "Didn't catch that. Tap and try again.";
+  // Back to idle with what was heard (or why nothing was); the engine is already off.
+  const settle = (t: string, failed = false) => {
+    phase.current = 'idle';
+    if (!live.current) return;
+    setListening(false);
+    const text = t.trim();
+    if (failed && !text) return setNote('Voice stopped. Try again, or use Type.');
+    if (!text) return setNote(NOT_HEARD);
+    setTranscript(text);
+    setHeard(parseVoiceEntry(text, medicines, companies, shopUnits(shop)));
+  };
   const finish = async () => {
     clearTimer();
     phase.current = 'stopping';
     const t = await engine.stop().catch(() => '');
-    phase.current = 'idle';
-    if (!live.current) return;
-    setListening(false);
-    const text = (t || said.current).trim();
-    if (!text) return toast("Didn't catch that. Tap the mic and try again.");
-    setTranscript(text);
-    setHeard(parseVoiceEntry(text, medicines, companies, shopUnits(shop)));
+    settle(t || said.current);
+  };
+  // The engine stopped on its own (silence, no match, OS timeout or an error).
+  const ended = (failed: boolean) => {
+    if (phase.current !== 'listening') return;
+    clearTimer();
+    settle(said.current, failed);
   };
   const arm = (ms: number) => {
     clearTimer();
     timer.current = setTimeout(() => phase.current === 'listening' && void finish(), ms);
   };
 
-  // Leaving the screen never leaves the mic open, even mid-start.
-  useEffect(
-    () => () => {
+  // Leaving the screen never leaves the mic open, even mid-start. Effects can re-run (Fast
+  // Refresh, strict mode), so `live` is set again on every run, not just at first render.
+  useEffect(() => {
+    live.current = true;
+    return () => {
       live.current = false;
       clearTimer();
       if (phase.current === 'starting') stopWanted.current = true;
       else if (phase.current === 'listening') void engine.stop().catch(() => '');
-    },
-    [engine],
-  );
+    };
+  }, [engine]);
 
   const start = async () => {
     phase.current = 'starting';
@@ -94,13 +110,17 @@ export function VoiceScreen({ engine = nativeSpeechEngine }: { engine?: SpeechEn
     said.current = '';
     setTranscript('');
     setHeard(null);
+    setNote('');
     setListening(true);
     try {
-      await engine.start((t) => {
-        said.current = t;
-        if (live.current) setTranscript(t);
-        if (phase.current === 'listening') arm(SILENCE_MS);
-      });
+      await engine.start(
+        (t) => {
+          said.current = t;
+          if (live.current) setTranscript(t);
+          if (phase.current === 'listening') arm(SILENCE_MS);
+        },
+        (failed) => ended(failed),
+      );
     } catch (e) {
       phase.current = 'idle';
       if (!live.current) return;
@@ -163,6 +183,7 @@ export function VoiceScreen({ engine = nativeSpeechEngine }: { engine?: SpeechEn
     <Screen
       back="Back"
       title="Speak"
+      centered
       footer={
         list.length ? <Button label={`Review ${list.length}`} full onPress={review} /> : undefined
       }
@@ -173,7 +194,7 @@ export function VoiceScreen({ engine = nativeSpeechEngine }: { engine?: SpeechEn
           <T size={14} color={tokens.color.muted} style={{ textAlign: 'center' }}>
             {listening
               ? 'Listening… tap to stop'
-              : 'Tap and say: name, company, batch, expiry, quantity'}
+              : note || 'Tap and say: name, company, batch, expiry, quantity'}
           </T>
           {transcript ? (
             <T size={16} style={{ textAlign: 'center' }} accessibilityLiveRegion="polite">
@@ -181,6 +202,16 @@ export function VoiceScreen({ engine = nativeSpeechEngine }: { engine?: SpeechEn
             </T>
           ) : null}
         </View>
+        {heard && !listening ? null : (
+          <Card>
+            <View style={{ padding: tokens.space[4], gap: tokens.space[1] }}>
+              <T size={12} weight="medium" color={tokens.color.muted}>
+                Say it like
+              </T>
+              <T size={14}>{EXAMPLE}</T>
+            </View>
+          </Card>
+        )}
         {heard && !listening ? (
           <Card>
             <View style={{ padding: tokens.space[4], gap: tokens.space[3] }}>

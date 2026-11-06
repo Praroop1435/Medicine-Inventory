@@ -18,6 +18,8 @@ type Props = {
   band?: ReactNode;
   /** Sits across the band's bottom edge, e.g. the Home search field. */
   bandEdge?: ReactNode;
+  /** Centres short content in the space under the title; it still scrolls once it grows. */
+  centered?: boolean;
 };
 
 /** The navy band behind a light status bar; the bar goes back to dark when the screen loses focus. */
@@ -50,7 +52,17 @@ function Band({ children, edge }: { children: ReactNode; edge?: ReactNode }) {
   );
 }
 
-export function Screen({ title, meta, back, onBack, children, footer, band, bandEdge }: Props) {
+export function Screen({
+  title,
+  meta,
+  back,
+  onBack,
+  children,
+  footer,
+  band,
+  bandEdge,
+  centered,
+}: Props) {
   return (
     <SafeAreaView
       edges={band ? ['left', 'right', 'bottom'] : undefined}
@@ -82,6 +94,7 @@ export function Screen({ title, meta, back, onBack, children, footer, band, band
         <ScrollView
           style={{ flex: 1 }}
           contentContainerStyle={{
+            flexGrow: centered ? 1 : undefined,
             paddingHorizontal: tokens.margin,
             paddingBottom: tokens.space[6],
           }}
@@ -101,7 +114,11 @@ export function Screen({ title, meta, back, onBack, children, footer, band, band
               ) : null}
             </View>
           ) : null}
-          {children}
+          {centered ? (
+            <View style={{ flex: 1, justifyContent: 'center' }}>{children}</View>
+          ) : (
+            children
+          )}
         </ScrollView>
         {footer ? (
           <View

@@ -17,7 +17,7 @@ export const nativeSpeechEngine: SpeechEngine = {
     (await ExpoSpeechRecognitionModule.getPermissionsAsync()).status as PermissionStatus,
   requestPermission: async () =>
     (await ExpoSpeechRecognitionModule.requestPermissionsAsync()).granted,
-  async start(onPartial) {
+  async start(onPartial, onEnd) {
     starting = true;
     cancelled = false;
     const perm = await ExpoSpeechRecognitionModule.requestPermissionsAsync().finally(() => {
@@ -31,6 +31,15 @@ export const nativeSpeechEngine: SpeechEngine = {
       ExpoSpeechRecognitionModule.addListener('result', (e) => {
         last = e.results[0]?.transcript ?? last;
         onPartial(last);
+      }),
+      // Silence and no-match are endings, not failures; the screen says it didn't catch that.
+      ExpoSpeechRecognitionModule.addListener('error', (e) => {
+        clear();
+        onEnd(!['no-speech', 'speech-timeout', 'aborted'].includes(e.error));
+      }),
+      ExpoSpeechRecognitionModule.addListener('end', () => {
+        clear();
+        onEnd(false);
       }),
     );
     ExpoSpeechRecognitionModule.start({ lang: 'en-IN', interimResults: true, continuous: true });

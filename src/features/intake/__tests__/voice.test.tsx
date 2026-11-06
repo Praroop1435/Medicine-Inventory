@@ -220,8 +220,62 @@ describe('voice screen', () => {
     } finally {
       jest.useRealTimers();
     }
+    expect(await screen.findByText("Didn't catch that. Tap and try again.")).toBeOnTheScreen();
+  });
+
+  /** Starts listening and returns the engine's own "I stopped" callback. */
+  async function listen(e: SpeechEngine) {
+    let partial: (t: string) => void = () => {};
+    let end: (failed: boolean) => void = () => {};
+    e.start = async (p, onEnd) => {
+      partial = p;
+      end = onEnd;
+    };
+    await start(e);
+    await fireEvent.press(await screen.findByRole('button', { name: 'Start listening' }));
+    await screen.findByText('Listening… tap to stop');
+    return {
+      partial: (t: string) => act(async () => partial(t)),
+      end: (f: boolean) => act(async () => end(f)),
+    };
+  }
+
+  it('goes back to idle when the engine stops by itself having heard nothing', async () => {
+    const e = fake(true, []);
+    const stop = jest.spyOn(e, 'stop');
+    const { end } = await listen(e);
+    await end(false);
+    expect(await screen.findByText("Didn't catch that. Tap and try again.")).toBeOnTheScreen();
+    expect(screen.getByRole('button', { name: 'Start listening' })).toBeOnTheScreen();
+    expect(screen.queryByText('Listening… tap to stop')).toBeNull();
+    // It already stopped; asking it to stop again would wait for an end that never comes.
+    expect(stop).not.toHaveBeenCalled();
+  });
+
+  it('shows what was heard when the engine stops by itself after speech', async () => {
+    const { partial, end } = await listen(fake(true, []));
+    await partial('Crocin batch b2');
+    await end(false);
+    expect(await screen.findByRole('button', { name: 'Add to list' })).toBeOnTheScreen();
+    expect(screen.getByRole('button', { name: 'Start listening' })).toBeOnTheScreen();
+  });
+
+  it('goes back to idle with a plain message when the engine fails', async () => {
+    const { end } = await listen(fake(true, []));
+    await end(true);
+    expect(await screen.findByText('Voice stopped. Try again, or use Type.')).toBeOnTheScreen();
+    expect(screen.getByRole('button', { name: 'Start listening' })).toBeOnTheScreen();
+    // The next tap starts afresh and clears the message.
+    await fireEvent.press(screen.getByRole('button', { name: 'Start listening' }));
+    expect(await screen.findByText('Listening… tap to stop')).toBeOnTheScreen();
+  });
+
+  it('shows how to say an entry', async () => {
+    await start(fake(true, []));
     expect(
-      await screen.findByText("Didn't catch that. Tap the mic and try again."),
+      await screen.findByText(
+        'Azithral 500, Alembic, batch A Z 8 8, expiry November 2026, 10 strips',
+      ),
     ).toBeOnTheScreen();
   });
 });
