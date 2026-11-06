@@ -14,6 +14,11 @@ import java.io.FileOutputStream
 
 /** Renders PDF pages to JPEGs in the cache dir at a chosen pixel width, using the platform PdfRenderer. */
 class PdfPagesModule : Module() {
+  private companion object {
+    const val MAX_HEIGHT = 4000
+  }
+
+
   private val context
     get() = appContext.reactContext ?: throw Exceptions.ReactContextLost()
 
@@ -41,15 +46,23 @@ class PdfPagesModule : Module() {
       withRenderer(uri) { renderer ->
         val page = renderer.openPage(pageIndex)
         try {
-          val scale = targetWidth.toFloat() / page.width
-          val height = Math.round(page.height * scale)
-          val bitmap = Bitmap.createBitmap(targetWidth, height, Bitmap.Config.ARGB_8888)
+          // A very tall page (a long till roll) at the target width could exhaust memory, so the
+          // height is capped and the width scaled down with it to keep the aspect ratio.
+          val scale = minOf(targetWidth.toFloat() / page.width, MAX_HEIGHT.toFloat() / page.height)
+          val width = maxOf(1, Math.round(page.width * scale))
+          val height = maxOf(1, Math.round(page.height * scale))
+          val bitmap = Bitmap.createBitmap(width, height, Bitmap.Config.ARGB_8888)
           try {
             bitmap.eraseColor(Color.WHITE)
             page.render(bitmap, null, Matrix().apply { setScale(scale, scale) }, PdfRenderer.Page.RENDER_MODE_FOR_DISPLAY)
             val out = File.createTempFile("pdfpage-", ".jpg", context.cacheDir)
-            FileOutputStream(out).use { bitmap.compress(Bitmap.CompressFormat.JPEG, 95, it) }
-            mapOf("uri" to Uri.fromFile(out).toString(), "width" to targetWidth, "height" to height)
+            try {
+              FileOutputStream(out).use { bitmap.compress(Bitmap.CompressFormat.JPEG, 95, it) }
+            } catch (e: Throwable) {
+              out.delete()
+              throw e
+            }
+            mapOf("uri" to Uri.fromFile(out).toString(), "width" to width, "height" to height)
           } finally {
             bitmap.recycle()
           }
