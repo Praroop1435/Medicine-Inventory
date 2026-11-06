@@ -251,3 +251,14 @@ Settings shows only four things **[call]**:
 3. **This phone's name.**
 4. **App** — version and "Check for update".
 Category and company management move out of Settings: categories are managed inside the Stock folders (§11.1); company rename/merge is dropped from v1 (companies are corrected on the review card) **[call]**.
+
+### 11.4 Delete always asks first **[owner]**
+Every destructive action opens a confirm popup before doing anything: Delete folder ("Delete folder “Cough”? This can't be undone." · Cancel / Delete), Mark returned, Remove phone, and saving a count of 0 ("This closes batch AZ88"). A non-empty folder can't be deleted; its ⋯ menu shows "Delete" disabled with the reason "Move or remove what's inside first".
+
+### 11.5 Nightly sales summary **[owner]**
+- A **daily night notification** (default **9:00 PM**, changeable in Settings → Reminders) summarising today: "Today: 14 units sold across 9 medicines · 3 counts corrected". If nothing happened, no notification.
+- Tapping it opens a **Today** screen: list of what was sold today (medicine · units · who), then stock-check corrections (medicine · old → new), then stock added (bills/entries). Today = local calendar day.
+- "Sold" = `sold` events (Sold 1 taps). Count decreases from stock checks are shown separately as "counts corrected", not as sales **[call]** — the app can't know whether a missing strip was sold, lost or expired.
+- Built like the morning expiry alert: computed on the phone from today's events and rescheduled whenever they change while the app is open **[call]**. Known limit: sales made on another phone after this phone's app was last open appear when the Today screen is opened, but may be missing from that night's notification text.
+- Home gets one quiet row under the counts: "Sold today: 14 units · View" → Today screen.
+- Settings item 1 becomes **Reminders**: expiry warning days + morning alert time + night summary time.
