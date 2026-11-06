@@ -51,7 +51,12 @@ describe('applyMatch', () => {
     const d = applyMatch(emptyDraft('manual'), meds, cos);
     expect(d.matchedMedicineId).toBeNull();
     const m = applyMatch({ ...emptyDraft('manual'), medicineName: 'azithral-500' }, meds, cos);
-    expect(m).toMatchObject({ matchedMedicineId: 'm1', companyName: 'Alembic', categoryId: 'cat9', unit: 'box' });
+    expect(m).toMatchObject({
+      matchedMedicineId: 'm1',
+      companyName: 'Alembic',
+      categoryId: 'cat9',
+      unit: 'box',
+    });
   });
   it('clears match but keeps fields when none', () => {
     const d = applyMatch(full({ matchedMedicineId: 'old', medicineName: 'Zzz' }), meds, cos);

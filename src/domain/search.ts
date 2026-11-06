@@ -1,3 +1,4 @@
+import { pluralUnit } from '@/lib/format';
 import { isLive } from './fefo';
 import { normalizeName } from './matching';
 import type { Batch, Company, Medicine } from './types';
@@ -34,7 +35,7 @@ export function searchInventory(
       r: {
         medicineId: m.id,
         title: m.name,
-        subtitle: `${company} · ${qty} ${m.unit}${qty === 1 ? '' : 's'}`,
+        subtitle: `${company} · ${pluralUnit(m.unit, qty)}`,
         ...(!byName && batch ? { matchedBatchNo: batch.batchNo } : {}),
       },
     });

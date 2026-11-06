@@ -42,9 +42,19 @@ describe('parseExpiry', () => {
     'parses %s',
     (s) => expect(parseExpiry(s)).toEqual({ year: 2026, month: 11 }),
   );
-  it.each(['1126', '13/26', '00/26', '', 'abc', '11/0026', '0026-11', '11/0000', '2026-13', '11/226', 'sept 26'])('rejects %s', (s) =>
-    expect(parseExpiry(s)).toBeNull(),
-  );
+  it.each([
+    '1126',
+    '13/26',
+    '00/26',
+    '',
+    'abc',
+    '11/0026',
+    '0026-11',
+    '11/0000',
+    '2026-13',
+    '11/226',
+    'sept 26',
+  ])('rejects %s', (s) => expect(parseExpiry(s)).toBeNull());
 });
 
 describe('formatExpiry', () => {

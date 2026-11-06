@@ -2,6 +2,7 @@ import { router, useLocalSearchParams } from 'expo-router';
 import { View } from 'react-native';
 import { batchesByStatus } from '@/domain/alerts';
 import { formatExpiry } from '@/domain/expiry';
+import { pluralUnit } from '@/lib/format';
 import { useInventory } from '@/features/shared/hooks/useInventory';
 import { useShop } from '@/features/shared/hooks/useShop';
 import { useToday } from '@/features/shared/hooks/useToday';
@@ -44,7 +45,7 @@ export function AlertListScreen() {
                   <View style={{ alignItems: 'flex-end', gap: tokens.space[1] }}>
                     <StatusPill status={s} label={formatExpiry(b.expiry)} />
                     <T size={12} color={tokens.color.muted} numberOfLines={1}>
-                      {`${b.qty} ${m.unit}${b.qty === 1 ? '' : 's'}`}
+                      {pluralUnit(m.unit, b.qty)}
                     </T>
                   </View>
                 }

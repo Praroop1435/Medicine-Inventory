@@ -2,13 +2,7 @@ import { findMedicineMatch } from './matching';
 import type { Company, Medicine, Unit, YearMonth } from './types';
 
 export type DraftField =
-  | 'medicineName'
-  | 'companyName'
-  | 'batchNo'
-  | 'expiry'
-  | 'qty'
-  | 'categoryId'
-  | 'unit';
+  'medicineName' | 'companyName' | 'batchNo' | 'expiry' | 'qty' | 'categoryId' | 'unit';
 
 export type DraftBatch = {
   key: string;

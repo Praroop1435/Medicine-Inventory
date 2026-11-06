@@ -1,6 +1,8 @@
 import {
+  ChevronDown,
   ChevronLeft,
   ChevronRight,
+  ChevronUp,
   CircleCheck,
   Check,
   FileText,
@@ -32,6 +34,8 @@ const icons = {
   file: FileText,
   plus: Plus,
   tick: Check,
+  up: ChevronUp,
+  down: ChevronDown,
 } satisfies Record<string, LucideIcon>;
 
 export type IconName = keyof typeof icons;

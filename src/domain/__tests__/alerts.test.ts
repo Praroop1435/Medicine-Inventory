@@ -49,12 +49,28 @@ test('medicineSummary', () => {
     makeBatch({ qty: 3, expiry: { year: 2027, month: 8 } }),
     makeBatch({ medicineId: 'other' }),
   ];
-  expect(medicineSummary('m1', bs, today, d)).toEqual({ qty: 5, batchCount: 2, next: SOON, worst: 'soon' });
-  expect(medicineSummary('zzz', bs, today, d)).toEqual({ qty: 0, batchCount: 0, next: null, worst: null });
+  expect(medicineSummary('m1', bs, today, d)).toEqual({
+    qty: 5,
+    batchCount: 2,
+    next: SOON,
+    worst: 'soon',
+  });
+  expect(medicineSummary('zzz', bs, today, d)).toEqual({
+    qty: 0,
+    batchCount: 0,
+    next: null,
+    worst: null,
+  });
 });
 
 describe('categorySummary', () => {
-  const med = (id: string, categoryId: string): Medicine => ({ id, name: id, categoryId, companyId: 'c', unit: 'box' });
+  const med = (id: string, categoryId: string): Medicine => ({
+    id,
+    name: id,
+    categoryId,
+    companyId: 'c',
+    unit: 'box',
+  });
   const meds = [med('m1', 'cat'), med('m2', 'cat'), med('m3', 'other')];
   test('worst and worstCount', () => {
     const bs = [
@@ -63,13 +79,22 @@ describe('categorySummary', () => {
       makeBatch({ medicineId: 'm2', expiry: SOON }),
       makeBatch({ medicineId: 'm3', expiry: EXPIRED }),
     ];
-    expect(categorySummary('cat', meds, bs, today, d)).toEqual({ medicineCount: 2, unitCount: 6, worst: 'expired', worstCount: 2 });
+    expect(categorySummary('cat', meds, bs, today, d)).toEqual({
+      medicineCount: 2,
+      unitCount: 6,
+      worst: 'expired',
+      worstCount: 2,
+    });
   });
   test('all ok', () => {
     const r = categorySummary('cat', meds, [makeBatch({ medicineId: 'm1' })], today, d);
     expect(r.worst).toBe('ok');
   });
   test('no batches', () => {
-    expect(categorySummary('cat', meds, [], today, d)).toMatchObject({ unitCount: 0, worst: null, worstCount: 0 });
+    expect(categorySummary('cat', meds, [], today, d)).toMatchObject({
+      unitCount: 0,
+      worst: null,
+      worstCount: 0,
+    });
   });
 });

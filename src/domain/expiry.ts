@@ -1,7 +1,20 @@
 import type { AlertDays, BatchStatus, YearMonth } from './types';
 
 const MONTHS = ['jan', 'feb', 'mar', 'apr', 'may', 'jun', 'jul', 'aug', 'sep', 'oct', 'nov', 'dec'];
-const FULL = ['january', 'february', 'march', 'april', 'may', 'june', 'july', 'august', 'september', 'october', 'november', 'december'];
+const FULL = [
+  'january',
+  'february',
+  'march',
+  'april',
+  'may',
+  'june',
+  'july',
+  'august',
+  'september',
+  'october',
+  'november',
+  'december',
+];
 
 // Last day of the month, local time.
 export const expiryDate = ({ year, month }: YearMonth): Date => new Date(year, month, 0);
