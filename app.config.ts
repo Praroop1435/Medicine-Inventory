@@ -1,7 +1,9 @@
 import type { ExpoConfig } from 'expo/config';
 import { readConfig } from './src/lib/config.ts';
 
-const cfg = readConfig(process.env);
+// The EAS project id is public (not a secret); default it so eas-cli works without a .env.
+const EAS_PROJECT_ID = '8b476ffd-e696-417e-ba48-61651fe305ec';
+const cfg = readConfig({ ...process.env, EAS_PROJECT_ID: process.env.EAS_PROJECT_ID || EAS_PROJECT_ID });
 
 const expoConfig: ExpoConfig = {
   name: cfg.appName,
