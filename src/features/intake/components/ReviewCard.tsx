@@ -11,18 +11,7 @@ import { useToday } from '@/features/shared/hooks/useToday';
 import { useToast } from '@/features/shared/Toast';
 import { useInventory } from '@/features/shared/hooks/useInventory';
 import { CategoryEditor } from '@/features/stock/components/CategoryEditor';
-import {
-  Button,
-  ButtonRow,
-  Card,
-  Chip,
-  ChipRow,
-  Field,
-  IconButton,
-  KeyValueRow,
-  T,
-  tokens,
-} from '@/ui';
+import { Button, ButtonRow, Card, Field, IconButton, KeyValueRow, Select, T, tokens } from '@/ui';
 import type { DraftPatch } from '../IntakeContext';
 import { MedicineAutocomplete } from './MedicineAutocomplete';
 
@@ -63,10 +52,19 @@ type Props = {
   onRemove?: () => void;
   /** Flag empty required fields amber. Off for a blank manual form. */
   flagMissing?: boolean;
+  /** Review: collapses the row back into its summary card. */
+  onDone?: () => void;
 };
 
 /** One intake row, shared by review and manual entry. Remount (key) when the draft is replaced. */
-export function ReviewCard({ draft: d, onChange, onConfirm, onRemove, flagMissing = true }: Props) {
+export function ReviewCard({
+  draft: d,
+  onChange,
+  onConfirm,
+  onRemove,
+  flagMissing = true,
+  onDone,
+}: Props) {
   const { categories } = useInventory();
   const [expiryText, setExpiryText] = useState(d.expiry ? mmYy(d.expiry) : '');
   const today = useToday();
@@ -125,14 +123,26 @@ export function ReviewCard({ draft: d, onChange, onConfirm, onRemove, flagMissin
       />,
     );
   };
-  const picker = (label: string, f: DraftField, chips: ReactNode) => (
-    <View style={{ gap: tokens.space[1] }}>
-      <T size={12} weight="medium" color={flag(f, '') ? tokens.color.soon : tokens.color.muted}>
-        {label}
-      </T>
-      <ChipRow wrap>{chips}</ChipRow>
-    </View>
-  );
+  const picker = (
+    label: string,
+    f: 'categoryId' | 'unit',
+    options: { id: string; label: string }[],
+    action: { label: string; onPress: () => void },
+  ) => {
+    const msg = flag(f, '');
+    return (
+      <Select
+        label={label}
+        options={options}
+        selected={d[f]}
+        onSelect={(id) => onChange({ [f]: id })}
+        placeholder={f === 'categoryId' ? 'Pick a folder' : 'Pick a unit'}
+        uncertain={!!msg}
+        uncertainLabel={msg}
+        action={action}
+      />
+    );
+  };
 
   return (
     <View testID="review-card">
@@ -178,17 +188,12 @@ export function ReviewCard({ draft: d, onChange, onConfirm, onRemove, flagMissin
               {input('companyName', 'Company', d.companyName, (t) => onChange({ companyName: t }), {
                 placeholder: 'e.g. Alembic',
               })}
-              {picker('Category', 'categoryId', [
-                ...walk(categories).map((c) => (
-                  <Chip
-                    key={c.id}
-                    label={pathLabel(categories, c.id)}
-                    selected={d.categoryId === c.id}
-                    onPress={() => onChange({ categoryId: c.id })}
-                  />
-                )),
-                <Chip key="+" label="+ New folder" onPress={() => setAddingFolder(true)} />,
-              ])}
+              {picker(
+                'Category',
+                'categoryId',
+                walk(categories).map((c) => ({ id: c.id, label: pathLabel(categories, c.id) })),
+                { label: '+ New folder', onPress: () => setAddingFolder(true) },
+              )}
               {addingFolder ? (
                 // New folders from intake go to the top level; they can be moved later in Stock.
                 <CategoryEditor
@@ -198,17 +203,12 @@ export function ReviewCard({ draft: d, onChange, onConfirm, onRemove, flagMissin
                   }}
                 />
               ) : null}
-              {picker('Unit', 'unit', [
-                ...shopUnits(shop).map((u) => (
-                  <Chip
-                    key={u}
-                    label={cap(u)}
-                    selected={d.unit === u}
-                    onPress={() => onChange({ unit: u })}
-                  />
-                )),
-                <Chip key="+" label="+ Add unit" onPress={() => setNewUnit('')} />,
-              ])}
+              {picker(
+                'Unit',
+                'unit',
+                shopUnits(shop).map((u) => ({ id: u, label: cap(u) })),
+                { label: '+ Add unit', onPress: () => setNewUnit('') },
+              )}
               {newUnit !== null ? (
                 <View style={{ gap: tokens.space[3] }}>
                   <Field label="New unit" value={newUnit} onChangeText={setNewUnit} />
@@ -254,6 +254,7 @@ export function ReviewCard({ draft: d, onChange, onConfirm, onRemove, flagMissin
             },
             { keyboardType: 'number-pad', placeholder: 'e.g. 10' },
           )}
+          {onDone ? <Button label="Done" variant="secondary" full onPress={onDone} /> : null}
         </View>
       </Card>
     </View>

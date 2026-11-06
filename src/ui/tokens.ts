@@ -25,6 +25,9 @@ export const tokens = {
     soonEdge: '#FCD9A8',
     watchBg: '#EEF1F5',
     watchInk: '#3D4A5C',
+    // Review only: a row a human has confirmed. Not an expiry status.
+    ok: '#147A3A',
+    okBg: '#E8F5EC',
     amber: '#D97706',
     scrim: 'rgba(16, 24, 40, 0.4)',
   },

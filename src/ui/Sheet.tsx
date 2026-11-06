@@ -1,5 +1,6 @@
-import type { ReactNode } from 'react';
+import { useContext, type ReactNode } from 'react';
 import { Modal, Pressable, View } from 'react-native';
+import { SafeAreaInsetsContext } from 'react-native-safe-area-context';
 import { T } from './Text';
 import { tokens } from './tokens';
 
@@ -14,6 +15,8 @@ export function Sheet({
   title?: string;
   children: ReactNode;
 }) {
+  // Context, not the hook, so tests without a provider still render. Clears the gesture bar.
+  const bottom = useContext(SafeAreaInsetsContext)?.bottom ?? 0;
   return (
     <Modal visible transparent animationType="slide" onRequestClose={onClose}>
       <Pressable
@@ -30,6 +33,7 @@ export function Sheet({
           borderTopRightRadius: tokens.radius.sheet,
           padding: tokens.margin,
           paddingTop: tokens.space[2],
+          paddingBottom: tokens.margin + bottom,
           gap: tokens.space[3],
           flexShrink: 1,
           ...tokens.shadow,

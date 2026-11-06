@@ -31,5 +31,8 @@ export { TickButton } from './TickButton';
 export { ShutterButton } from './ShutterButton';
 export { RoundButton } from './RoundButton';
 export { MicButton } from './MicButton';
+export { Select } from './Select';
+export type { SelectOption } from './Select';
+export { RowStatus } from './RowStatus';
 export type { IconName } from './Icon';
 export { T } from './Text';
