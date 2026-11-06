@@ -4,11 +4,26 @@ import type { AlertDays, Batch, Category, Medicine } from './types';
 // Categories form a tree of folders via parentId (§11.1). A missing parentId (older docs) is top level.
 const parentOf = (c: Category) => c.parentId ?? null;
 
-/** One sibling group, by order then name. */
-export const childrenOf = (cats: Category[], parentId: string | null): Category[] =>
-  cats
-    .filter((c) => parentOf(c) === parentId)
+// False when the parent chain hits a missing folder or loops (offline races, e.g. a move
+// on one phone and a delete or opposite move on another).
+function reachesRoot(byId: Map<string, Category>, c: Category): boolean {
+  const seen = new Set<string>();
+  for (let p = parentOf(c); p !== null; p = parentOf(byId.get(p)!)) {
+    if (seen.has(p) || !byId.has(p)) return false;
+    seen.add(p);
+  }
+  return true;
+}
+
+/** One sibling group, by order then name. The top level also holds orphans and cycles, so Move to… can repair them. */
+export function childrenOf(cats: Category[], parentId: string | null): Category[] {
+  const byId = new Map(cats.map((c) => [c.id, c]));
+  return cats
+    .filter((c) =>
+      parentId === null ? parentOf(c) === null || !reachesRoot(byId, c) : parentOf(c) === parentId,
+    )
     .sort((a, b) => a.order - b.order || a.name.localeCompare(b.name));
+}
 
 /** Every folder below `id`, any depth, excluding `id`. Safe on a corrupt cycle. */
 export function descendantIds(cats: Category[], id: string): string[] {
@@ -45,9 +60,20 @@ export function pathOf(cats: Category[], id: string): string[] {
 /** "Syrups › Cough" */
 export const pathLabel = (cats: Category[], id: string): string => pathOf(cats, id).join(' › ');
 
-/** All folders depth-first in sibling order, the order a folder picker lists them. */
-export function walk(cats: Category[], parentId: string | null = null): Category[] {
-  return childrenOf(cats, parentId).flatMap((c) => [c, ...walk(cats, c.id)]);
+/** All folders depth-first in sibling order, the order a folder picker lists them. Each once, even in a cycle. */
+export function walk(cats: Category[]): Category[] {
+  const out: Category[] = [];
+  const seen = new Set<string>();
+  const go = (parentId: string | null) => {
+    for (const c of childrenOf(cats, parentId))
+      if (!seen.has(c.id)) {
+        seen.add(c.id);
+        out.push(c);
+        go(c.id);
+      }
+  };
+  go(null);
+  return out;
 }
 
 /** Order for a folder appended to a sibling group. */

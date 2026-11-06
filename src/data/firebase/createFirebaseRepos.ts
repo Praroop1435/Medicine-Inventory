@@ -31,6 +31,7 @@ import {
   DEFAULT_NOTIFY_TIME,
   checkDeletable,
   checkMerge,
+  folderName,
   moveChange,
   newJoinSecret,
   returnChange,
@@ -358,6 +359,12 @@ export function createFirebaseRepos(opts: { onWriteError?: (e: Error) => void } 
           ref(shopId, 'categories', id),
           moveChange(await categories(shopId), id, newParentId),
         );
+      },
+      async renameCategory(shopId, id, name) {
+        const n = folderName(name);
+        const r = ref(shopId, 'categories', id);
+        if (!(await readDoc(r)).exists()) throw new Error('category not found');
+        update(r, { name: n });
       },
       async deleteCategory(shopId, id) {
         const [cats, meds] = await Promise.all([

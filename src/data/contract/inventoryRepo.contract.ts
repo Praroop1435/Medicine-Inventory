@@ -103,6 +103,30 @@ export function runInventoryContract(make: () => Repos): void {
       await expect(inv().moveCategory(shopId, dry, 'nope', deviceId)).rejects.toThrow(/not found/);
     });
 
+    it('renameCategory changes only the name', async () => {
+      const cough = await folder('Cough', catId, 3);
+      await inv().upsertCategory(shopId, { ...byId(cough)!, lastCheckedAt: 55 });
+      await inv().renameCategory(shopId, cough, '  Wet cough ', deviceId);
+      expect(byId(cough)).toEqual({
+        id: cough,
+        name: 'Wet cough',
+        order: 3,
+        lastCheckedAt: 55,
+        parentId: catId,
+      });
+    });
+
+    it('renameCategory rejects a blank name, a missing folder and a non-member', async () => {
+      await expect(inv().renameCategory(shopId, catId, '  ', deviceId)).rejects.toThrow(/name/);
+      await expect(inv().renameCategory(shopId, 'nope', 'X', deviceId)).rejects.toThrow(
+        /not found/,
+      );
+      await expect(inv().renameCategory(shopId, catId, 'X', 'ghost')).rejects.toThrow(
+        /not a member/,
+      );
+      expect(byId(catId)?.name).toBe('Antibiotics');
+    });
+
     it('deleteCategory removes an empty folder', async () => {
       const cough = await folder('Cough', catId);
       await inv().deleteCategory(shopId, cough, deviceId);

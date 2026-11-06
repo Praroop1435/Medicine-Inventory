@@ -18,6 +18,7 @@ import {
   DEFAULT_NOTIFY_TIME,
   checkDeletable,
   checkMerge,
+  folderName,
   moveChange,
   newJoinSecret,
   returnChange,
@@ -214,6 +215,13 @@ export function createMemoryRepos(now: () => number = Date.now): Repos {
             s.categories.find((c) => c.id === id)!,
             patch,
           );
+        }),
+      renameCategory: (shopId, id, name, deviceId) =>
+        write(shopId, deviceId, (s) => {
+          const n = folderName(name);
+          const c = s.categories.find((x) => x.id === id);
+          if (!c) throw new Error('category not found');
+          c.name = n;
         }),
       deleteCategory: (shopId, id, deviceId) =>
         write(shopId, deviceId, (s) => {

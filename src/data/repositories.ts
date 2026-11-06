@@ -70,6 +70,8 @@ export interface InventoryRepo {
     newParentId: string | null,
     deviceId: string,
   ): Promise<void>;
+  /** Writes only `name` (trimmed), so a stale snapshot can't undo another phone's changes. */
+  renameCategory(shopId: string, id: string, name: string, deviceId: string): Promise<void>;
   /** Rejects unless the folder has no sub-folders and no medicines. */
   deleteCategory(shopId: string, id: string, deviceId: string): Promise<void>;
   renameCompany(shopId: string, companyId: string, name: string): Promise<void>;

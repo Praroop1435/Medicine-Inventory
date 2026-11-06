@@ -124,3 +124,31 @@ describe('rollupSummary', () => {
     });
   });
 });
+
+describe('broken trees from offline races', () => {
+  // x ↔ y is a cycle; orphan points at a deleted folder.
+  const broken = [...CATS, cat('x', 'y', 0), cat('y', 'x', 0), cat('orphan', 'gone', 0)];
+
+  it('a cycle and an orphan show at the top level so they can be moved back', () => {
+    expect(childrenOf(broken, null).map((c) => c.id)).toEqual(
+      expect.arrayContaining(['syrups', 'balms', 'x', 'y', 'orphan']),
+    );
+    expect(childrenOf(broken, null)).toHaveLength(5);
+  });
+
+  it('walk, descendantIds and pathOf stay finite', () => {
+    const ids = walk(broken).map((c) => c.id);
+    expect(ids).toHaveLength(broken.length);
+    expect(new Set(ids).size).toBe(broken.length);
+    expect(descendantIds(broken, 'x')).toEqual(['y']);
+    expect(pathOf(broken, 'x')).toEqual(['Y', 'X']);
+    expect(pathOf(broken, 'orphan')).toEqual(['Orphan']);
+  });
+
+  it('a folder that is its own parent is top level and finite', () => {
+    const self = [cat('s', 's')];
+    expect(childrenOf(self, null).map((c) => c.id)).toEqual(['s']);
+    expect(walk(self).map((c) => c.id)).toEqual(['s']);
+    expect(descendantIds(self, 's')).toEqual([]);
+  });
+});

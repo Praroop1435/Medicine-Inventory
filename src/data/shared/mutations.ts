@@ -28,6 +28,12 @@ export function checkMerge(fromId: string, intoId: string, all: { id: string }[]
     throw new Error('record not found');
 }
 
+export function folderName(name: string): string {
+  const n = name.trim();
+  if (!n) throw new Error('folder name is required');
+  return n;
+}
+
 /** The only fields a move writes: the new parent and a place at the end of its sibling group. */
 export function moveChange(cats: Category[], id: string, parentId: string | null) {
   if (!cats.some((c) => c.id === id)) throw new Error('category not found');

@@ -1,4 +1,4 @@
-import { fireEvent, renderRouter, screen, within } from 'expo-router/testing-library';
+import { act, fireEvent, renderRouter, screen, within } from 'expo-router/testing-library';
 import { createMemoryRepos } from '@/data/memory/createMemoryRepos';
 import type { Repos } from '@/data/repositories';
 import { emptyDraft } from '@/domain/draft';
@@ -178,10 +178,17 @@ describe('folders', () => {
     await menu('Kids');
     await fireEvent.press(screen.getByRole('button', { name: 'Rename' }));
     expect(screen.getByLabelText('Folder name').props.value).toBe('Kids');
+    // Another phone checks the folder while the rename field is open.
+    const kids = s.all().find((c) => c.name === 'Kids')!;
+    await act(() => s.repos.inventory.upsertCategory(s.shopId, { ...kids, lastCheckedAt: 99 }));
     await fireEvent.changeText(screen.getByLabelText('Folder name'), 'Children');
     await fireEvent.press(screen.getByRole('button', { name: 'Save' }));
     expect(await screen.findByRole('button', { name: /^Children,/ })).toBeOnTheScreen();
-    expect(s.all().find((c) => c.name === 'Children')?.parentId).toBe(s.id('Dry'));
+    expect(s.all().find((c) => c.id === kids.id)).toMatchObject({
+      name: 'Children',
+      parentId: s.id('Dry'),
+      lastCheckedAt: 99,
+    });
   });
 
   it('⋯ Move to… lists folders as paths without itself, its descendants or its parent', async () => {
