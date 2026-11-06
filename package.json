@@ -10,7 +10,7 @@
     "typecheck": "tsc --noEmit",
     "test": "jest",
     "build:apk": "eas build -p android --profile preview",
-    "update:prod": "eas update --channel production",
+    "update:prod": "APP_VARIANT=production eas update --channel production --environment production",
     "test:rules": "firebase emulators:exec --only firestore --project demo-medstock \"jest --config firebase/jest.rules.config.js\""
   },
   "dependencies": {
@@ -37,6 +37,7 @@
     "expo-splash-screen": "~58.0.13",
     "expo-status-bar": "~58.0.4",
     "expo-system-ui": "~58.0.7",
+    "expo-updates": "~58.0.21",
     "lucide-react-native": "^1.70.0",
     "react": "^19.3.0",
     "react-dom": "^19.3.0",

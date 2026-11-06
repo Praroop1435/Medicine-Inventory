@@ -16,9 +16,15 @@ const expoConfig: ExpoConfig = {
   icon: './assets/images/icon.png',
   scheme: 'medstock',
   userInterfaceStyle: 'light',
+  // Dynamic config: eas-cli can't write these, so they live here.
+  runtimeVersion: { policy: 'appVersion' },
+  updates: { url: `https://u.expo.dev/${EAS_PROJECT_ID}` },
   android: {
     package: cfg.androidPackage,
-    googleServicesFile: process.env.GOOGLE_SERVICES_JSON ?? './google-services.json',
+    // EAS supplies GOOGLE_SERVICES_JSON per environment; locally each variant uses its own file.
+    googleServicesFile:
+      process.env.GOOGLE_SERVICES_JSON ||
+      (cfg.variant === 'development' ? './google-services.dev.json' : './google-services.json'),
     adaptiveIcon: {
       backgroundColor: '#26344E',
       foregroundImage: './assets/images/android-icon-foreground.png',

@@ -1,6 +1,7 @@
 {
   "cli": {
-    "version": ">= 16.0.0"
+    "version": ">= 16.0.0",
+    "appVersionSource": "remote"
   },
   "build": {
     "development": {
@@ -26,7 +27,8 @@
         "EAS_PROJECT_ID": "8b476ffd-e696-417e-ba48-61651fe305ec"
       },
       "channel": "production",
-      "environment": "production"
+      "environment": "production",
+      "autoIncrement": true
     },
     "test": {
       "distribution": "internal",

@@ -9,7 +9,8 @@ import { useShop } from '@/features/shared/hooks/useShop';
 import { useNotifier } from '@/features/shared/NotifierContext';
 import { usePermissionStatus } from '@/features/shared/PermissionGate';
 import { errorCopy, useToast } from '@/features/shared/Toast';
-import { noUpdater, type Updater } from '@/services/updates/Updater';
+import { expoUpdater } from '@/services/updates/expo';
+import type { Updater } from '@/services/updates/Updater';
 import {
   Button,
   Card,
@@ -87,7 +88,7 @@ function Reminders({ shop }: { shop: Shop }) {
 }
 
 /** Settings has exactly four parts (§11.3): Reminders, Phones, This phone's name, App. */
-export function SettingsScreen({ updater = noUpdater }: { updater?: Updater }) {
+export function SettingsScreen({ updater = expoUpdater }: { updater?: Updater }) {
   const { shop: shopRepo } = useRepos();
   const { session, setSession } = useSession();
   const shop = useShop();
@@ -144,7 +145,7 @@ export function SettingsScreen({ updater = noUpdater }: { updater?: Updater }) {
       r === 'latest'
         ? 'You have the latest version'
         : r === 'unavailable'
-          ? 'Updates arrive with new app versions'
+          ? "This build doesn't get updates"
           : "Couldn't check for updates",
     );
   };

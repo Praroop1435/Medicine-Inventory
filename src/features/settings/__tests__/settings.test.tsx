@@ -189,10 +189,10 @@ describe('settings', () => {
     expect(await screen.findByText('Priya counter (this phone)')).toBeOnTheScreen();
   });
 
-  it('shows the version and explains updates until they are wired', async () => {
+  it('shows the version and says when this build gets no updates', async () => {
     await open();
     expect(screen.getByText('Version')).toBeOnTheScreen();
     await fireEvent.press(screen.getByRole('button', { name: 'Check for update' }));
-    expect(await screen.findByText('Updates arrive with new app versions')).toBeOnTheScreen();
+    expect(await screen.findByText("This build doesn't get updates")).toBeOnTheScreen();
   });
 });
