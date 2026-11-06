@@ -69,7 +69,6 @@ function parseRow(toks: Tok[], cols: Cols): DraftBatch | null {
   // otherwise the token right after the expiry is the qty, and several integers is ambiguous.
   const start = Math.max(expIdx, batchIdx) + 1;
   const after = toks.slice(start);
-  const ints = after.filter((k) => qtyFromToken(k.t) !== null);
   let ambiguous = false;
   let q: number | null;
   if (cols.qty !== undefined) {
@@ -77,7 +76,7 @@ function parseRow(toks: Tok[], cols: Cols): DraftBatch | null {
     q = k ? qtyFromToken(k.t) : null;
   } else {
     q = after[0] ? qtyFromToken(after[0].t) : null;
-    ambiguous = q !== null && ints.length > 1 && !after[0].t.includes('+');
+    ambiguous = true; // no Qty column: the value is a best guess (could be a rate), always confirm
   }
   if (q !== null && cols.free !== undefined) {
     const f = after.find((x) => under(x, cols.free, cols.tol) && /^\d+$/.test(x.t));

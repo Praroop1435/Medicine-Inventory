@@ -203,4 +203,17 @@ describe('column rules', () => {
     expect(d.medicineName).toBe('Vitamin D3');
     expect(d.uncertain).toContain('batchNo');
   });
+
+  it('no Qty header: one integer after expiry is kept but flagged', () => {
+    const d = one(
+      at(70, [
+        [0, 'X'],
+        [100, 'A1'],
+        [200, '08/27'],
+        [300, '98'],
+      ]),
+    );
+    expect(d.qty).toBe(98);
+    expect(d.uncertain).toContain('qty');
+  });
 });
