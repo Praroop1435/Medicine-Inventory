@@ -1,8 +1,8 @@
 import { getDocumentAsync } from 'expo-document-picker';
 import { CameraView } from 'expo-camera';
 import { launchImageLibraryAsync } from 'expo-image-picker';
-import { router } from 'expo-router';
-import { useRef, useState, type ReactNode } from 'react';
+import { router, useFocusEffect } from 'expo-router';
+import { useCallback, useRef, useState, type ReactNode } from 'react';
 import { Image, View } from 'react-native';
 import { cameraPermission } from '@/services/camera';
 import type { OcrEngine } from '@/services/ocr/OcrEngine';
@@ -64,16 +64,24 @@ export function ScanScreen({
     }
     if (!parsed.drafts.length) return setPhase('empty');
     setDrafts(parsed.drafts, { supplier: '', billNo: '', billDate: '', ...parsed.header });
-    setPhase('ready');
     if (truncated) toast(`Only the first ${MAX_PDF_PAGES} pages were read.`);
+    // Stay on the frozen photo while leaving: remounting the camera under the pushed screen
+    // freezes the Android display on the old frame. The camera comes back on refocus.
     router.push('/intake/review');
   };
+  useFocusEffect(
+    useCallback(() => setPhase((p) => (p === 'reading' ? 'ready' : p)), []),
+  );
   // One capture/pick at a time: a second tap while the camera, picker or OCR is busy is ignored.
   const run = async (getUri: () => Promise<string | undefined>, pdf = false) => {
     if (busy.current) return;
     busy.current = true;
     try {
       await read(await getUri(), pdf);
+    } catch {
+      // the camera or a picker rejected: say so rather than silently staying put
+      setIsPdf(pdf);
+      setPhase('failed');
     } finally {
       busy.current = false;
     }

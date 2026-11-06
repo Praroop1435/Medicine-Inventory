@@ -1,5 +1,6 @@
 import { getDocumentAsync } from 'expo-document-picker';
-import { fireEvent, renderRouter, screen } from 'expo-router/testing-library';
+import { router } from 'expo-router';
+import { act, fireEvent, renderRouter, screen } from 'expo-router/testing-library';
 import { createMemoryRepos } from '@/data/memory/createMemoryRepos';
 import { AppShell } from '@/features/shared/AppShell';
 import { ToastProvider } from '@/features/shared/Toast';
@@ -30,12 +31,8 @@ jest.mock('expo-camera', () => {
   };
 });
 jest.mock('expo-document-picker', () => ({ getDocumentAsync: jest.fn() }));
-jest.mock('expo-image-picker', () => ({
-  launchImageLibraryAsync: async () => ({
-    canceled: false,
-    assets: [{ uri: 'file:///cache/pick.jpg' }],
-  }),
-}));
+const mockPick = jest.fn();
+jest.mock('expo-image-picker', () => ({ launchImageLibraryAsync: () => mockPick() }));
 
 function ReviewStub() {
   const { drafts, bill } = useIntake();
@@ -102,6 +99,7 @@ async function start(lines: OcrLine[] | Error, renderer: PdfRenderer = pdfRender
 beforeEach(() => {
   mockStore.clear();
   mockGranted = true;
+  mockPick.mockResolvedValue({ canceled: false, assets: [{ uri: 'file:///cache/pick.jpg' }] });
 });
 
 describe('scan screen', () => {
@@ -115,6 +113,22 @@ describe('scan screen', () => {
     await start(GOOD);
     await fireEvent.press(await screen.findByRole('button', { name: 'Photo from gallery' }));
     expect(await screen.findByText(/Review stub: 2/)).toBeOnTheScreen();
+  });
+
+  it('shows the camera again on coming back from review', async () => {
+    await start(GOOD);
+    await fireEvent.press(await screen.findByRole('button', { name: 'Photo from gallery' }));
+    expect(await screen.findByText(/Review stub: 2/)).toBeOnTheScreen();
+    await act(async () => router.back());
+    expect(await screen.findByRole('button', { name: 'Take photo' })).toBeOnTheScreen();
+    expect(screen.queryByText('Reading bill…')).toBeNull();
+  });
+
+  it('says so when the gallery picker fails', async () => {
+    mockPick.mockRejectedValue(new Error('picker died'));
+    await start(GOOD);
+    await fireEvent.press(await screen.findByRole('button', { name: 'Photo from gallery' }));
+    expect(await screen.findByText("Couldn't read the photo. Try again.")).toBeOnTheScreen();
   });
 
   it('shows a message and Retake when nothing is read', async () => {
