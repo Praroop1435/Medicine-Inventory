@@ -2,7 +2,7 @@ import * as SecureStore from 'expo-secure-store';
 import { useCallback, useEffect, useState } from 'react';
 import { AppState, Linking, View } from 'react-native';
 import type { Permission, PermissionStatus } from '@/services/Permission';
-import { Button, T, tokens } from '@/ui';
+import { Button, Card, IconTile, T, tokens, type IconName } from '@/ui';
 
 /** Current OS status; re-read when the app comes back from the background (e.g. from Android settings). */
 export function usePermissionStatus(source: Permission) {
@@ -61,21 +61,28 @@ export function usePermissionGate(kind: 'camera' | 'mic', source: Permission): P
 /** Renders nothing unless the gate needs the reason or the "Open settings" fallback. */
 export function PermissionPrompt({
   gate,
+  icon,
   reason,
   off,
 }: {
   gate: PermissionGate;
+  icon: IconName;
   reason: string;
   off: string;
 }) {
   if (gate.state !== 'ask' && gate.state !== 'off') return null;
   const ask = gate.state === 'ask';
   return (
-    <View style={{ gap: tokens.space[3] }}>
-      <T size={14} color={tokens.color.muted}>
-        {ask ? reason : off}
-      </T>
-      <Button label={ask ? 'Continue' : 'Open settings'} onPress={gate.allow} />
-    </View>
+    <Card>
+      <View style={{ padding: tokens.space[4], gap: tokens.space[3], alignItems: 'center' }}>
+        <IconTile icon={icon} size={tokens.emptyIcon} round />
+        <T size={14} color={tokens.color.muted} style={{ textAlign: 'center' }}>
+          {ask ? reason : off}
+        </T>
+        <View style={{ alignSelf: 'stretch' }}>
+          <Button label={ask ? 'Continue' : 'Open settings'} full onPress={gate.allow} />
+        </View>
+      </View>
+    </Card>
   );
 }

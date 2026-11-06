@@ -2,8 +2,8 @@ import { getDocumentAsync } from 'expo-document-picker';
 import { CameraView } from 'expo-camera';
 import { launchImageLibraryAsync } from 'expo-image-picker';
 import { router } from 'expo-router';
-import { useRef, useState } from 'react';
-import { View } from 'react-native';
+import { useRef, useState, type ReactNode } from 'react';
+import { Image, View } from 'react-native';
 import { cameraPermission } from '@/services/camera';
 import type { OcrEngine } from '@/services/ocr/OcrEngine';
 import { parseBillText } from '@/services/ocr/billParser';
@@ -12,7 +12,7 @@ import { nativePdfRenderer } from '@/services/pdf/native';
 import type { PdfRenderer } from '@/services/pdf/PdfRenderer';
 import type { Permission } from '@/services/Permission';
 import { MAX_PDF_PAGES, readPdfBill } from '@/services/pdf/readPdfBill';
-import { Button, ButtonRow, Screen, T, tokens } from '@/ui';
+import { Button, ButtonRow, RoundButton, Screen, ShutterButton, T, tokens } from '@/ui';
 import { PermissionPrompt, usePermissionGate } from '@/features/shared/PermissionGate';
 import { useToast } from '@/features/shared/Toast';
 import { useIntake } from '../IntakeContext';
@@ -40,10 +40,13 @@ export function ScanScreen({
   const [phase, setPhase] = useState<'ready' | 'reading' | 'empty' | 'failed'>('ready');
   const [progress, setProgress] = useState('Reading bill…');
   const [isPdf, setIsPdf] = useState(false);
+  // The captured or picked photo, frozen under the reading progress.
+  const [photo, setPhoto] = useState<string | null>(null);
 
   const read = async (uri: string | undefined, pdf = false) => {
     if (!uri) return setPhase('ready');
     setIsPdf(pdf);
+    setPhoto(pdf ? null : uri);
     setProgress(pdf ? 'Preparing pages…' : 'Reading bill…');
     setPhase('reading');
     let parsed: ReturnType<typeof parseBillText>;
@@ -88,10 +91,61 @@ export function ScanScreen({
       return r.canceled ? undefined : r.assets[0]?.uri;
     }, true);
 
+  // The live camera (or, before permission, the reason) in a 3:4 frame with the bill guide.
+  const granted = gate.state === 'granted';
+  const frame = (content: ReactNode, overlay?: ReactNode) => (
+    <View
+      style={{
+        width: '100%',
+        aspectRatio: 3 / 4,
+        borderRadius: tokens.radius.card,
+        overflow: 'hidden',
+        justifyContent: 'center',
+        backgroundColor: tokens.color.navy,
+      }}
+    >
+      {content}
+      {overlay}
+    </View>
+  );
+  const guide = (
+    <View
+      pointerEvents="none"
+      style={{
+        position: 'absolute',
+        inset: tokens.space[4],
+        borderWidth: tokens.stroke,
+        borderColor: tokens.color.surface,
+        borderRadius: tokens.radius.control,
+      }}
+    />
+  );
+
   if (phase === 'reading')
     return (
       <Screen back="Back" title="Scan bill">
-        <T color={tokens.color.muted}>{progress}</T>
+        {frame(
+          photo ? (
+            <Image
+              source={{ uri: photo }}
+              resizeMode="cover"
+              style={{ position: 'absolute', width: '100%', height: '100%' }}
+            />
+          ) : null,
+          <View
+            style={{
+              position: 'absolute',
+              inset: 0,
+              alignItems: 'center',
+              justifyContent: 'center',
+              backgroundColor: tokens.color.scrim,
+            }}
+          >
+            <T size={16} weight="semibold" color={tokens.color.onPrimary}>
+              {progress}
+            </T>
+          </View>,
+        )}
       </Screen>
     );
   if (phase === 'empty' || phase === 'failed')
@@ -109,37 +163,40 @@ export function ScanScreen({
       </Screen>
     );
 
-  const granted = gate.state === 'granted';
   return (
-    <Screen back="Back" title="Scan bill">
-      <View style={{ gap: tokens.space[3] }}>
-        {granted ? (
-          <View style={{ borderRadius: tokens.radius.card, overflow: 'hidden' }}>
-            <CameraView ref={camera} style={{ width: '100%', aspectRatio: 3 / 4 }} />
-            <View
-              pointerEvents="none"
-              style={{
-                position: 'absolute',
-                inset: tokens.space[4],
-                borderWidth: tokens.stroke,
-                borderColor: tokens.color.surface,
-                borderRadius: tokens.radius.control,
-              }}
+    <Screen
+      back="Back"
+      title="Scan bill"
+      footer={
+        <View style={{ gap: tokens.space[2] }}>
+          <View
+            style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-around' }}
+          >
+            <RoundButton icon="image" caption="Gallery" label="Photo from gallery" onPress={pick} />
+            <ShutterButton
+              label={granted ? 'Take photo' : 'Allow camera'}
+              onPress={granted ? capture : gate.allow}
             />
+            <RoundButton icon="file" caption="PDF" label="PDF file" onPress={pickPdf} />
           </View>
-        ) : (
-          <PermissionPrompt
-            gate={gate}
-            reason="The camera is used to photograph bills. Photos stay on this phone."
-            off="Camera permission is off. Allow it to photograph the bill, or pick a photo instead."
+          <Button
+            label="Type instead"
+            variant="text"
+            onPress={() => router.replace('/intake/manual')}
           />
-        )}
-        <ButtonRow>
-          <Button label="Camera" disabled={!granted} onPress={capture} />
-          <Button label="Photo from gallery" variant="secondary" onPress={pick} />
-          <Button label="PDF file" variant="secondary" onPress={pickPdf} />
-        </ButtonRow>
-      </View>
+        </View>
+      }
+    >
+      {granted ? (
+        frame(<CameraView ref={camera} style={{ position: 'absolute', inset: 0 }} />, guide)
+      ) : (
+        <PermissionPrompt
+          gate={gate}
+          icon="camera"
+          reason="The camera is used to photograph bills. Photos stay on this phone."
+          off="Camera permission is off. Allow it to photograph the bill, or pick a photo instead."
+        />
+      )}
     </Screen>
   );
 }

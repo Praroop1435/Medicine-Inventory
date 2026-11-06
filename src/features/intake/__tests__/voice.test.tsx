@@ -1,11 +1,12 @@
 import { act, fireEvent, renderRouter, screen } from 'expo-router/testing-library';
+import { StyleSheet } from 'react-native';
 import { createMemoryRepos } from '@/data/memory/createMemoryRepos';
 import { AppShell } from '@/features/shared/AppShell';
 import { ToastProvider } from '@/features/shared/Toast';
 import type { SpeechEngine } from '@/services/speech/SpeechEngine';
-import { T } from '@/ui';
+import { tokens, T } from '@/ui';
 import { useIntake } from '../IntakeContext';
-import { VoiceScreen } from '../screens/VoiceScreen';
+import { NO_SPEECH_MS, SILENCE_MS, VoiceScreen } from '../screens/VoiceScreen';
 
 const mockStore = new Map<string, string>();
 jest.mock('expo-secure-store', () => ({
@@ -40,7 +41,7 @@ async function start(engine: SpeechEngine) {
   const repos = createMemoryRepos(() => t++);
   const { shopId, deviceId } = await repos.shop.createShop('Anand Medicals', 'Ravi');
   mockStore.set('session', JSON.stringify({ shopId, deviceId, displayName: 'Ravi' }));
-  await renderRouter(
+  return renderRouter(
     {
       _layout: () => (
         <ToastProvider>
@@ -55,34 +56,57 @@ async function start(engine: SpeechEngine) {
   );
 }
 
+/** Tap to start, tap to stop: the fake engine "hears" the next phrase on stop. */
 const speak = async () => {
-  const mic = await screen.findByRole('button', { name: 'Hold to speak' });
-  await fireEvent(mic, 'pressIn');
-  await fireEvent(mic, 'pressOut');
+  await fireEvent.press(await screen.findByRole('button', { name: 'Start listening' }));
+  await fireEvent.press(await screen.findByRole('button', { name: 'Stop listening' }));
 };
 
 beforeEach(() => mockStore.clear());
 
 describe('voice screen', () => {
-  it('appends two entries then reviews both', async () => {
+  it('shows what was heard, adds it to the list, then reviews both', async () => {
     await start(fake(true, ['Azithral 500 batch a1 expiry 11 26 2 cartons', 'Crocin batch b2']));
+    expect(
+      await screen.findByText('Tap and say: name, company, batch, expiry, quantity'),
+    ).toBeOnTheScreen();
     await speak();
     expect(
       await screen.findByText('Azithral 500 batch a1 expiry 11 26 2 cartons'),
     ).toBeOnTheScreen();
-    await fireEvent.press(screen.getByRole('button', { name: 'Next' }));
+    expect(screen.getByText('Azithral 500')).toBeOnTheScreen();
+    expect(screen.getByText('A1')).toBeOnTheScreen();
+    expect(screen.getByText('Nov 2026')).toBeOnTheScreen();
+    await fireEvent.press(screen.getByRole('button', { name: 'Add to list' }));
     expect(await screen.findByText('Azithral 500 · A1 · 2')).toBeOnTheScreen();
     await speak();
-    await fireEvent.press(screen.getByRole('button', { name: 'Next' }));
+    await fireEvent.press(await screen.findByRole('button', { name: 'Add to list' }));
     expect(await screen.findByText('Crocin · B2 · —')).toBeOnTheScreen();
     await fireEvent.press(screen.getByRole('button', { name: 'Review 2' }));
     expect(await screen.findByText('Review stub: A1,B2')).toBeOnTheScreen();
   });
 
+  it('marks unsure or missing fields amber in the preview', async () => {
+    await start(fake(true, ['Crocin batch b2']));
+    await speak();
+    const qty = await screen.findByText('Qty');
+    expect(StyleSheet.flatten(qty.props.style).color).toBe(tokens.color.soon);
+  });
+
+  it('Try again listens afresh and drops the preview', async () => {
+    await start(fake(true, ['Crocin batch b2', 'Dolo batch d1']));
+    await speak();
+    await fireEvent.press(await screen.findByRole('button', { name: 'Try again' }));
+    expect(screen.queryByRole('button', { name: 'Add to list' })).toBeNull();
+    expect(screen.getByText('Listening… tap to stop')).toBeOnTheScreen();
+    await fireEvent.press(screen.getByRole('button', { name: 'Stop listening' }));
+    expect(await screen.findByText('Dolo batch d1')).toBeOnTheScreen();
+  });
+
   it('removes a row', async () => {
     await start(fake(true, ['Crocin batch b2']));
     await speak();
-    await fireEvent.press(await screen.findByRole('button', { name: 'Next' }));
+    await fireEvent.press(await screen.findByRole('button', { name: 'Add to list' }));
     await fireEvent.press(await screen.findByRole('button', { name: 'Remove Crocin' }));
     expect(screen.queryByText('Crocin · B2 · —')).toBeNull();
   });
@@ -102,7 +126,7 @@ describe('voice screen', () => {
     expect(
       await screen.findByText('The microphone is used to add stock by voice.'),
     ).toBeOnTheScreen();
-    expect(screen.queryByRole('button', { name: 'Hold to speak' })).toBeNull();
+    expect(screen.queryByRole('button', { name: 'Start listening' })).toBeNull();
     await fireEvent.press(screen.getByRole('button', { name: 'Continue' }));
     expect(
       await screen.findByText(
@@ -119,43 +143,85 @@ describe('voice screen', () => {
       throw new PermissionDenied();
     };
     await start(e);
-    await speak();
+    await fireEvent.press(await screen.findByRole('button', { name: 'Start listening' }));
     expect(
       await screen.findByText('Turn on the microphone to add stock by voice.'),
     ).toBeOnTheScreen();
+    expect(screen.getByRole('button', { name: 'Start listening' })).toBeOnTheScreen();
   });
 
-  it('stops once start resolves when released during the permission prompt', async () => {
+  it('stops once start resolves when stop was tapped during the permission prompt', async () => {
     let open: () => void = () => {};
     const e = fake(true, ['Crocin batch b2']);
     e.start = () => new Promise<void>((r) => void (open = r));
     const stop = jest.spyOn(e, 'stop');
     await start(e);
-    const mic = await screen.findByRole('button', { name: 'Hold to speak' });
-    await fireEvent(mic, 'pressIn');
-    await fireEvent(mic, 'pressOut');
+    await fireEvent.press(await screen.findByRole('button', { name: 'Start listening' }));
+    await fireEvent.press(screen.getByRole('button', { name: 'Stop listening' }));
     expect(stop).not.toHaveBeenCalled();
     await act(async () => open());
     expect(stop).toHaveBeenCalledTimes(1);
   });
 
-  it('stops after a quick tap', async () => {
-    const e = fake(true, ['Crocin batch b2']);
+  it('stops the mic when the screen goes away while listening', async () => {
+    const e = fake(true, []);
     const stop = jest.spyOn(e, 'stop');
-    await start(e);
-    await speak();
+    const r = await start(e);
+    await fireEvent.press(await screen.findByRole('button', { name: 'Start listening' }));
+    await screen.findByRole('button', { name: 'Stop listening' });
+    await r.unmount();
     expect(stop).toHaveBeenCalledTimes(1);
   });
 
-  it('toggles listening on a bare press for screen readers', async () => {
-    const e = fake(true, ['Crocin batch b2']);
-    const startSpy = jest.spyOn(e, 'start');
+  it('stops the mic when the screen goes away while still starting', async () => {
+    let open: () => void = () => {};
+    const e = fake(true, []);
+    e.start = () => new Promise<void>((r) => void (open = r));
+    const stop = jest.spyOn(e, 'stop');
+    const r = await start(e);
+    await fireEvent.press(await screen.findByRole('button', { name: 'Start listening' }));
+    await r.unmount();
+    expect(stop).not.toHaveBeenCalled();
+    await act(async () => open());
+    expect(stop).toHaveBeenCalledTimes(1);
+  });
+
+  it(`stops by itself ${SILENCE_MS} ms after the last word`, async () => {
+    let partial: (t: string) => void = () => {};
+    const e = fake(true, []);
+    e.start = async (p) => void (partial = p);
+    e.stop = jest.fn(async () => 'Crocin batch b2');
+    await start(e);
+    await fireEvent.press(await screen.findByRole('button', { name: 'Start listening' }));
+    await screen.findByText('Listening… tap to stop');
+    jest.useFakeTimers();
+    try {
+      await act(async () => partial('Crocin batch b2'));
+      expect(await screen.findByText('Crocin batch b2')).toBeOnTheScreen();
+      await act(async () => jest.advanceTimersByTime(SILENCE_MS - 100));
+      expect(e.stop).not.toHaveBeenCalled();
+      await act(async () => jest.advanceTimersByTime(200));
+      expect(e.stop).toHaveBeenCalledTimes(1);
+    } finally {
+      jest.useRealTimers();
+    }
+    expect(await screen.findByRole('button', { name: 'Add to list' })).toBeOnTheScreen();
+  });
+
+  it(`gives up after ${NO_SPEECH_MS} ms with nothing heard`, async () => {
+    const e = fake(true, []);
     const stop = jest.spyOn(e, 'stop');
     await start(e);
-    const mic = await screen.findByRole('button', { name: 'Hold to speak' });
-    await fireEvent.press(mic);
-    expect(startSpy).toHaveBeenCalledTimes(1);
-    await fireEvent.press(mic);
-    expect(stop).toHaveBeenCalledTimes(1);
+    jest.useFakeTimers();
+    try {
+      await fireEvent.press(await screen.findByRole('button', { name: 'Start listening' }));
+      await act(async () => jest.advanceTimersByTime(NO_SPEECH_MS + 10));
+      expect(stop).toHaveBeenCalledTimes(1);
+    } finally {
+      jest.useRealTimers();
+    }
+    expect(
+      await screen.findByText("Didn't catch that. Tap the mic and try again."),
+    ).toBeOnTheScreen();
   });
 });

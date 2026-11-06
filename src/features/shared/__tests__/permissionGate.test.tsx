@@ -30,6 +30,7 @@ function Host({ source }: { source: Permission }) {
   ) : (
     <PermissionPrompt
       gate={gate}
+      icon="camera"
       reason="Used to photograph bills."
       off="Camera permission is off."
     />

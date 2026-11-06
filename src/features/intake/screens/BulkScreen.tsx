@@ -9,7 +9,7 @@ import { useInventory } from '@/features/shared/hooks/useInventory';
 import { useToast } from '@/features/shared/Toast';
 import { parseSheetRows, type SheetError } from '@/services/bulk/sheetParser';
 import { readSheetFile, shareTemplate } from '@/services/bulk/template';
-import { Button, ButtonRow, Card, ListRow, Screen, T, tokens } from '@/ui';
+import { Button, ButtonRow, Card, IconTile, ListRow, Screen, T, tokens } from '@/ui';
 import { useIntake } from '../IntakeContext';
 
 /** Import stock from a CSV/XLSX sheet; a clean file goes straight to review. */
@@ -47,9 +47,14 @@ export function BulkScreen() {
   return (
     <Screen back="Back" title="Bulk import">
       <View style={{ gap: tokens.space[3] }}>
-        <T color={tokens.color.muted}>
-          Fill the template on a computer or in Sheets, then pick the file.
-        </T>
+        <Card>
+          <View style={{ padding: tokens.space[4], gap: tokens.space[3], alignItems: 'center' }}>
+            <IconTile icon="sheet" size={tokens.emptyIcon} round />
+            <T color={tokens.color.muted} style={{ textAlign: 'center' }}>
+              Fill the template on a computer or in Sheets, then pick the file (.xlsx or .csv).
+            </T>
+          </View>
+        </Card>
         <ButtonRow>
           <Button
             label="Get template"

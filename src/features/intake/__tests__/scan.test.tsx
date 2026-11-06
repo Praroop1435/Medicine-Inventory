@@ -107,7 +107,7 @@ beforeEach(() => {
 describe('scan screen', () => {
   it('captures, reads, and opens review with drafts and header', async () => {
     await start(GOOD);
-    await fireEvent.press(await screen.findByRole('button', { name: 'Camera' }));
+    await fireEvent.press(await screen.findByRole('button', { name: 'Take photo' }));
     expect(await screen.findByText('Review stub: 2 from RAJ PHARMA #INV-9')).toBeOnTheScreen();
   });
 
@@ -119,14 +119,14 @@ describe('scan screen', () => {
 
   it('shows a message and Retake when nothing is read', async () => {
     await start(row(10, 'blurry'));
-    await fireEvent.press(await screen.findByRole('button', { name: 'Camera' }));
+    await fireEvent.press(await screen.findByRole('button', { name: 'Take photo' }));
     expect(
       await screen.findByText(
         "Couldn't read any medicines. Try again with better light, or type them.",
       ),
     ).toBeOnTheScreen();
     await fireEvent.press(screen.getByRole('button', { name: 'Retake' }));
-    expect(await screen.findByRole('button', { name: 'Camera' })).toBeOnTheScreen();
+    expect(await screen.findByRole('button', { name: 'Take photo' })).toBeOnTheScreen();
   });
 
   it('still offers the gallery when the camera is denied', async () => {
@@ -135,7 +135,9 @@ describe('scan screen', () => {
     await start(GOOD);
     expect(await screen.findByText(/Camera permission is off/)).toBeOnTheScreen();
     expect(screen.getByRole('button', { name: 'Open settings' })).toBeOnTheScreen();
-    expect(screen.getByRole('button', { name: 'Camera' })).toBeDisabled();
+    // No dead grey button: the shutter asks for the camera instead.
+    expect(screen.getByRole('button', { name: 'Allow camera' })).toBeEnabled();
+    expect(screen.queryByRole('button', { name: 'Take photo' })).toBeNull();
     await fireEvent.press(screen.getByRole('button', { name: 'Photo from gallery' }));
     expect(await screen.findByText(/Review stub: 2/)).toBeOnTheScreen();
   });
@@ -147,11 +149,15 @@ describe('scan screen', () => {
       await screen.findByText('The camera is used to photograph bills. Photos stay on this phone.'),
     ).toBeOnTheScreen();
     expect(screen.getByRole('button', { name: 'Continue' })).toBeOnTheScreen();
+    // The small source buttons are there from the start.
+    expect(screen.getByRole('button', { name: 'Photo from gallery' })).toBeOnTheScreen();
+    expect(screen.getByRole('button', { name: 'PDF file' })).toBeOnTheScreen();
+    expect(screen.getByRole('button', { name: 'Type instead' })).toBeOnTheScreen();
   });
 
   it('distinguishes an engine failure from zero rows', async () => {
     await start(new Error('boom'));
-    await fireEvent.press(await screen.findByRole('button', { name: 'Camera' }));
+    await fireEvent.press(await screen.findByRole('button', { name: 'Take photo' }));
     expect(await screen.findByText("Couldn't read the photo. Try again.")).toBeOnTheScreen();
   });
 

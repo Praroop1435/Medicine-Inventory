@@ -6,7 +6,7 @@ import type { Category } from '@/domain/types';
 import { useSession } from '@/features/onboarding/SessionContext';
 import { useInventory } from '@/features/shared/hooks/useInventory';
 import { useToast } from '@/features/shared/Toast';
-import { ConfirmDialog, ListRow, Sheet, T } from '@/ui';
+import { ConfirmDialog, ListRow, Sheet } from '@/ui';
 import { CategoryEditor } from './CategoryEditor';
 
 /** A folder row's ⋯ menu: Rename · Move to… · Delete (only when empty, and it asks first). */
@@ -45,10 +45,7 @@ export function FolderMenu({ folder, onClose }: { folder: Category; onClose: () 
   const move = (to: string | null) => run(inventory.moveCategory(shopId, folder.id, to, deviceId));
 
   return (
-    <Sheet onClose={onClose}>
-      <T size={16} weight="medium" numberOfLines={1}>
-        {mode === 'move' ? `Move “${folder.name}” to` : folder.name}
-      </T>
+    <Sheet onClose={onClose} title={mode === 'move' ? `Move “${folder.name}” to` : folder.name}>
       {mode === 'rename' ? (
         <CategoryEditor folder={folder} onDone={onClose} />
       ) : mode === 'move' ? (

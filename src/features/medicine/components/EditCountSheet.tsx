@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { Button, ButtonRow, ConfirmDialog, Sheet, Stepper, T } from '@/ui';
+import { Button, ButtonRow, ConfirmDialog, Sheet, Stepper } from '@/ui';
 
 /** Bottom sheet: set the shelf count for one batch. A count of 0 closes the batch, so it asks first. */
 export function EditCountSheet({
@@ -16,8 +16,7 @@ export function EditCountSheet({
   const [value, setValue] = useState(qty);
   const [confirming, setConfirming] = useState(false);
   return (
-    <Sheet onClose={onClose}>
-      <T size={16} weight="medium">{`Edit count · batch ${batchNo}`}</T>
+    <Sheet onClose={onClose} title={`Edit count · batch ${batchNo}`}>
       <Stepper value={value} onChange={setValue} min={0} />
       <ButtonRow>
         <Button label="Cancel" variant="secondary" onPress={onClose} />

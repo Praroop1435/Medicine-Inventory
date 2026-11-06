@@ -28,5 +28,8 @@ export { ActionTile } from './ActionTile';
 export { Logo } from './Logo';
 export { Banner } from './Banner';
 export { TickButton } from './TickButton';
+export { ShutterButton } from './ShutterButton';
+export { RoundButton } from './RoundButton';
+export { MicButton } from './MicButton';
 export type { IconName } from './Icon';
 export { T } from './Text';

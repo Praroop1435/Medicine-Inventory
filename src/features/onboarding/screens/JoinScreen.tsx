@@ -12,6 +12,7 @@ function QrScanner({ onScan }: { onScan: (data: string) => void }) {
   if (gate.state !== 'granted')
     return (
       <PermissionPrompt
+        icon="camera"
         gate={gate}
         reason="The camera is needed to scan the shop QR from another phone."
         off="Camera permission is off. Turn it on to scan the shop QR."
