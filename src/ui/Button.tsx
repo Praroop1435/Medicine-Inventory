@@ -5,12 +5,22 @@ import { tokens } from './tokens';
 type Props = {
   label: string;
   variant?: 'primary' | 'secondary';
-  onPress: () => void;
+  onPress?: () => void;
+  onPressIn?: () => void;
+  onPressOut?: () => void;
   disabled?: boolean;
   full?: boolean;
 };
 
-export function Button({ label, variant = 'primary', onPress, disabled, full }: Props) {
+export function Button({
+  label,
+  variant = 'primary',
+  onPress,
+  onPressIn,
+  onPressOut,
+  disabled,
+  full,
+}: Props) {
   const primary = variant === 'primary';
   return (
     <Pressable
@@ -19,6 +29,8 @@ export function Button({ label, variant = 'primary', onPress, disabled, full }: 
       accessibilityState={{ disabled: !!disabled }}
       disabled={disabled}
       onPress={onPress}
+      onPressIn={onPressIn}
+      onPressOut={onPressOut}
       style={({ pressed }) => ({
         height: full ? 48 : tokens.touch,
         alignSelf: full ? 'stretch' : undefined,
