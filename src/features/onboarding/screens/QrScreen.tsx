@@ -9,7 +9,8 @@ import { Button, ButtonRow, Card, Screen, T, tokens } from '@/ui';
 import { resetTo } from '../resetTo';
 import { toQrPayload } from '../qr';
 
-export function QrScreen() {
+/** `again` = shown from Settings: Back instead of the onboarding "I saved it". */
+export function QrScreen({ again }: { again?: boolean }) {
   const shop = useShop();
   const toast = useToast();
   const qrRef = useRef<ComponentRef<typeof View>>(null);
@@ -25,12 +26,17 @@ export function QrScreen() {
 
   return (
     <Screen
-      title="Save your shop QR"
+      back={again ? 'Settings' : undefined}
+      title={again ? 'Shop QR' : 'Save your shop QR'}
       footer={
-        <ButtonRow>
-          <Button label="Save QR image" variant="secondary" onPress={save} />
-          <Button label="I saved it" onPress={() => resetTo('/onboarding/notify')} />
-        </ButtonRow>
+        again ? (
+          <Button label="Save QR image" full onPress={save} />
+        ) : (
+          <ButtonRow>
+            <Button label="Save QR image" variant="secondary" onPress={save} />
+            <Button label="I saved it" onPress={() => resetTo('/onboarding/notify')} />
+          </ButtonRow>
+        )
       }
     >
       <T size={16}>

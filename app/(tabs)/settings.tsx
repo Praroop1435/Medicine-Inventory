@@ -1,6 +1,5 @@
-import { Screen } from '@/ui';
+import { SettingsScreen } from '@/features/settings/screens/SettingsScreen';
 
-// Placeholder until the Settings screen is built.
 export default function SettingsTab() {
-  return <Screen title="Settings">{null}</Screen>;
+  return <SettingsScreen />;
 }
