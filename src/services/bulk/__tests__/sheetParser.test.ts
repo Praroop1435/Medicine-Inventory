@@ -1,4 +1,4 @@
-import type { Category } from '@/domain/types';
+import { DEFAULT_UNITS, type Category } from '@/domain/types';
 import { DATE_CELL, parseSheetRows } from '../sheetParser';
 
 const cats: Category[] = [
@@ -12,7 +12,7 @@ describe('parseSheetRows', () => {
       ['QTY', 'Batch', 'MEDICINE', 'Unit', 'Company', 'Expiry', 'Category'],
       ['10+1', ' AZ88 ', ' Azithral 500 ', 'Cartons', ' Alembic ', '11/26', 'antibiotics'],
     ];
-    const { drafts, errors } = parseSheetRows(rows, cats);
+    const { drafts, errors } = parseSheetRows(rows, cats, DEFAULT_UNITS);
     expect(errors).toEqual([]);
     expect(drafts).toHaveLength(1);
     expect(drafts[0]).toMatchObject({
@@ -28,8 +28,25 @@ describe('parseSheetRows', () => {
     });
   });
 
+  it('accepts a custom shop unit and rejects an unknown one with a helpful message', () => {
+    const rows = [
+      H,
+      ['', 'A', 'M', 'Kits', 'B', '11/26', '1'],
+      ['', 'A', 'M', 'sack', 'B', '11/26', '1'],
+    ];
+    const { drafts, errors } = parseSheetRows(rows, cats, [...DEFAULT_UNITS, 'kit']);
+    expect(drafts.map((d) => d.unit)).toEqual(['kit']);
+    expect(errors).toEqual([
+      { row: 3, message: 'Unknown unit \u201csack\u201d. Add it in the app first.' },
+    ]);
+  });
+
   it('reports a missing column once', () => {
-    const { drafts, errors } = parseSheetRows([H.filter((h) => h !== 'batch'), ['a']], cats);
+    const { drafts, errors } = parseSheetRows(
+      [H.filter((h) => h !== 'batch'), ['a']],
+      cats,
+      DEFAULT_UNITS,
+    );
     expect(drafts).toEqual([]);
     expect(errors).toEqual([{ row: 1, message: 'Missing column: batch' }]);
   });
@@ -42,6 +59,7 @@ describe('parseSheetRows', () => {
         ['', 'A', 'Bad', 'box', 'B2', '13/26', '1'],
       ],
       cats,
+      DEFAULT_UNITS,
     );
     expect(drafts).toHaveLength(1);
     expect(errors).toEqual([{ row: 3, message: 'Expiry not readable' }]);
@@ -59,6 +77,7 @@ describe('parseSheetRows', () => {
         ['', '', '', '', '', '', ''],
       ],
       cats,
+      DEFAULT_UNITS,
     );
     expect(drafts).toEqual([]);
     expect(errors.map((e) => e.row)).toEqual([2, 3, 4, 5, 6]);
@@ -68,6 +87,7 @@ describe('parseSheetRows', () => {
     const { drafts } = parseSheetRows(
       [H, ['Vitamins', 'A', 'M', 'strip', 'B', '11/26', '2']],
       cats,
+      DEFAULT_UNITS,
     );
     expect(drafts[0].categoryId).toBeNull();
   });
@@ -76,6 +96,7 @@ describe('parseSheetRows', () => {
     const { drafts, errors } = parseSheetRows(
       [H, ['', 'A', 'M', 'box', 'B', DATE_CELL, '1']],
       cats,
+      DEFAULT_UNITS,
     );
     expect(drafts).toEqual([]);
     expect(errors).toEqual([

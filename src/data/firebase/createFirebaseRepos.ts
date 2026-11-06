@@ -1,6 +1,7 @@
 import { getApp } from '@react-native-firebase/app';
 import {
   CACHE_SIZE_UNLIMITED,
+  arrayUnion,
   collection,
   doc,
   getDoc,
@@ -20,7 +21,16 @@ import {
   type Query,
   type WriteBatch,
 } from '@react-native-firebase/firestore';
-import type { Batch, Bill, Company, Medicine, Shop, StockEvent } from '@/domain/types';
+import {
+  DEFAULT_UNITS,
+  cleanUnit,
+  type Batch,
+  type Bill,
+  type Company,
+  type Medicine,
+  type Shop,
+  type StockEvent,
+} from '@/domain/types';
 import { descendantIds } from '@/domain/tree';
 import { newId } from '@/lib/ids';
 import type { CheckSession, Repos, Unsub } from '../repositories';
@@ -189,6 +199,7 @@ export function createFirebaseRepos(opts: { onWriteError?: (e: Error) => void } 
           alertDays: { ...DEFAULT_ALERT_DAYS },
           notifyTime: DEFAULT_NOTIFY_TIME,
           joinSecret,
+          units: [...DEFAULT_UNITS],
         });
         const device: DeviceDoc = { displayName, joinedAt: Date.now(), removed: false, joinSecret };
         wb.set(ref(shopId, 'devices', deviceId), device);
@@ -231,6 +242,14 @@ export function createFirebaseRepos(opts: { onWriteError?: (e: Error) => void } 
           onError,
         ),
       updateShop: async (shopId, patch) => update(doc(db, shopPath(shopId)), patch),
+      async addUnit(shopId, unit) {
+        const u = cleanUnit(unit);
+        const r = doc(db, shopPath(shopId));
+        const { units } = (await readDoc(r)).data() ?? {};
+        if (units?.length) {
+          if (!units.includes(u)) update(r, { units: arrayUnion(u) });
+        } else update(r, { units: [...DEFAULT_UNITS.filter((x) => x !== u), u] });
+      },
       watchDevices: (shopId, cb) =>
         list(col(shopId, 'devices'), (id, d) => deviceFromDoc(id, d as DeviceDoc), cb),
       renameDevice: async (shopId, deviceId, name) =>

@@ -1,5 +1,14 @@
 import { emptyDraft, type DraftBatch } from '@/domain/draft';
-import type { Batch, Bill, Category, Company, Medicine, StockEvent } from '@/domain/types';
+import {
+  DEFAULT_UNITS,
+  type Batch,
+  type Bill,
+  type Category,
+  type Company,
+  type Medicine,
+  type Shop,
+  type StockEvent,
+} from '@/domain/types';
 import type { CheckSession, Repos } from '../repositories';
 
 const last = <T>(w: (cb: (v: T) => void) => () => void): T => {
@@ -181,6 +190,22 @@ export function runInventoryContract(make: () => Repos): void {
     expect(s.alertDays).toEqual({ first: 90, second: 30 });
     expect(s.notifyTime).toBe('09:00');
     expect(s.joinSecret.length).toBeGreaterThanOrEqual(24);
+  });
+
+  describe('units', () => {
+    const units = () => last<Shop>((cb) => r.shop.watchShop(shopId, cb)).units;
+    it('a new shop gets the default units', () => expect(units()).toEqual(DEFAULT_UNITS));
+    it('addUnit trims, lowercases and appends; duplicates in any case are a no-op', async () => {
+      await r.shop.addUnit(shopId, '  Kit ', deviceId);
+      await r.shop.addUnit(shopId, 'KIT', deviceId);
+      await r.shop.addUnit(shopId, 'Strip', deviceId);
+      expect(units()).toEqual([...DEFAULT_UNITS, 'kit']);
+    });
+    it('addUnit rejects blank and over-long units', async () => {
+      await expect(r.shop.addUnit(shopId, '   ', deviceId)).rejects.toThrow();
+      await expect(r.shop.addUnit(shopId, 'x'.repeat(25), deviceId)).rejects.toThrow();
+      expect(units()).toEqual(DEFAULT_UNITS);
+    });
   });
 
   it('saveIntake creates company, medicine, batch and an added event', async () => {

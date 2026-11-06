@@ -8,6 +8,15 @@ describe('pluralUnit', () => {
     ['piece', 0, '0 pieces'],
     ['strip', 3, '3 strips'],
     ['bottle', 6, '6 bottles'],
+    ['capsule', 2, '2 capsules'],
+    ['ampoule', 4, '4 ampoules'],
+    ['inhaler', 2, '2 inhalers'],
+    ['drops', 2, '2 drops'],
+    ['drops', 1, '1 drops'],
+    ['kit', 3, '3 kits'],
+    ['kit', 1, '1 kit'],
+    ['patch', 2, '2 patches'],
+    ['glass', 2, '2 glasses'],
   ] as const)('%s x %i', (unit, n, out) => expect(pluralUnit(unit, n)).toBe(out));
 });
 

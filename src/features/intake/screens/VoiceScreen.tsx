@@ -2,6 +2,8 @@ import { router } from 'expo-router';
 import { useEffect, useRef, useState } from 'react';
 import { View } from 'react-native';
 import type { DraftBatch } from '@/domain/draft';
+import { shopUnits } from '@/domain/types';
+import { useShop } from '@/features/shared/hooks/useShop';
 import { useInventory } from '@/features/shared/hooks/useInventory';
 import { useToast } from '@/features/shared/Toast';
 import { PermissionDenied, type SpeechEngine } from '@/services/speech/SpeechEngine';
@@ -13,6 +15,7 @@ import { useIntake } from '../IntakeContext';
 /** Hold to speak one batch at a time ("Next" keeps listening), then review them all. */
 export function VoiceScreen({ engine = nativeSpeechEngine }: { engine?: SpeechEngine }) {
   const { medicines, companies } = useInventory();
+  const shop = useShop();
   const { setDrafts } = useIntake();
   const toast = useToast();
   const [available, setAvailable] = useState<boolean | null>(null);
@@ -64,7 +67,7 @@ export function VoiceScreen({ engine = nativeSpeechEngine }: { engine?: SpeechEn
     return phase.current === 'idle' ? press() : release();
   };
   const next = () => {
-    setList((l) => [...l, parseVoiceEntry(transcript, medicines, companies)]);
+    setList((l) => [...l, parseVoiceEntry(transcript, medicines, companies, shopUnits(shop))]);
     setTranscript('');
   };
   const review = () => {

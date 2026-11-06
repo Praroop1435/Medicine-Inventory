@@ -1,7 +1,8 @@
 import { emptyDraft, type DraftBatch } from '@/domain/draft';
 import { parseExpiry } from '@/domain/expiry';
 import { normalizeName } from '@/domain/matching';
-import { UNITS, type Category, type Unit } from '@/domain/types';
+import { pluralUnit } from '@/lib/format';
+import type { Category, Unit } from '@/domain/types';
 
 export const TEMPLATE_HEADERS = [
   'category',
@@ -24,15 +25,17 @@ const parseQty = (s: string): number | null => {
   return n >= 1 ? n : null;
 };
 
-const parseUnit = (s: string): Unit | null => {
+/** Matches the shop's units, singular or plural ("Cartons" → carton). */
+export const matchUnit = (s: string, units: readonly string[]): Unit | null => {
   const t = s.trim().toLowerCase();
-  return UNITS.find((u) => t === u || t === `${u}s` || t === `${u}es`) ?? null;
+  return units.find((u) => t === u || t === pluralUnit(u, 2).slice(2)) ?? null;
 };
 
 /** `rows[0]` is the header; error rows are 1-based spreadsheet rows. */
 export function parseSheetRows(
   rows: string[][],
   categories: Category[],
+  units: readonly string[],
 ): { drafts: DraftBatch[]; errors: SheetError[] } {
   const head = (rows[0] ?? []).map((h) => h.trim().toLowerCase());
   const missing = TEMPLATE_HEADERS.filter((h) => !head.includes(h));
@@ -55,12 +58,12 @@ export function parseSheetRows(
       });
     const row = i + 2;
     const fail = (message: string) => errors.push({ row, message });
-    const unit = parseUnit(cell('unit'));
+    const unit = matchUnit(cell('unit'), units);
     const qty = parseQty(cell('qty'));
     const expiry = parseExpiry(cell('expiry'));
     if (!cell('medicine')) return fail('Medicine is blank');
     if (!cell('batch')) return fail('Batch is blank');
-    if (!unit) return fail('Unit not recognised');
+    if (!unit) return fail(`Unknown unit \u201c${cell('unit')}\u201d. Add it in the app first.`);
     if (qty === null) return fail('Quantity must be a whole number, 1 or more');
     if (!expiry) return fail('Expiry not readable');
     const cat = normalizeName(cell('category'));

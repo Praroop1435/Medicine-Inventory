@@ -3,10 +3,26 @@ import { View } from 'react-native';
 import { draftIssues, type DraftBatch, type DraftField } from '@/domain/draft';
 import { formatExpiry, parseExpiry } from '@/domain/expiry';
 import { pathLabel, walk } from '@/domain/tree';
-import { UNITS } from '@/domain/types';
+import { shopUnits } from '@/domain/types';
+import { useRepos } from '@/data/RepoContext';
+import { useSession } from '@/features/onboarding/SessionContext';
+import { useShop } from '@/features/shared/hooks/useShop';
+import { useToast } from '@/features/shared/Toast';
 import { useInventory } from '@/features/shared/hooks/useInventory';
 import { CategoryEditor } from '@/features/stock/components/CategoryEditor';
-import { Card, Chip, ChipRow, Field, IconButton, KeyValueRow, Pill, T, tokens } from '@/ui';
+import {
+  Button,
+  ButtonRow,
+  Card,
+  Chip,
+  ChipRow,
+  Field,
+  IconButton,
+  KeyValueRow,
+  Pill,
+  T,
+  tokens,
+} from '@/ui';
 import type { DraftPatch } from '../IntakeContext';
 import { MedicineAutocomplete } from './MedicineAutocomplete';
 
@@ -42,6 +58,21 @@ export function ReviewCard({ draft: d, onChange, onConfirm, onRemove, flagMissin
   const [expiryText, setExpiryText] = useState(d.expiry ? formatExpiry(d.expiry) : '');
   const [qtyText, setQtyText] = useState(d.qty === null ? '' : String(d.qty));
   const [addingFolder, setAddingFolder] = useState(false);
+  const [newUnit, setNewUnit] = useState<string | null>(null);
+  const shop = useShop();
+  const repos = useRepos().shop;
+  const session = useSession().session;
+  const toast = useToast();
+  const addUnit = async () => {
+    if (!session || !newUnit?.trim()) return;
+    try {
+      await repos.addUnit(session.shopId, newUnit, session.deviceId);
+      onChange({ unit: newUnit.trim().toLowerCase() });
+      setNewUnit(null);
+    } catch (e) {
+      toast(e instanceof Error ? e.message : 'Something went wrong');
+    }
+  };
   const issues = draftIssues(d);
   const matched = d.matchedMedicineId !== null;
 
@@ -140,10 +171,8 @@ export function ReviewCard({ draft: d, onChange, onConfirm, onRemove, flagMissin
                   }}
                 />
               ) : null}
-              {picker(
-                'Unit',
-                'unit',
-                UNITS.map((u) => (
+              {picker('Unit', 'unit', [
+                ...shopUnits(shop).map((u) => (
                   <Chip
                     key={u}
                     label={cap(u)}
@@ -151,7 +180,17 @@ export function ReviewCard({ draft: d, onChange, onConfirm, onRemove, flagMissin
                     onPress={() => onChange({ unit: u })}
                   />
                 )),
-              )}
+                <Chip key="+" label="+ Add unit" onPress={() => setNewUnit('')} />,
+              ])}
+              {newUnit !== null ? (
+                <View style={{ gap: tokens.space[3] }}>
+                  <Field label="New unit" value={newUnit} onChangeText={setNewUnit} />
+                  <ButtonRow>
+                    <Button label="Cancel" variant="secondary" onPress={() => setNewUnit(null)} />
+                    <Button label="Add" disabled={!newUnit.trim()} onPress={addUnit} />
+                  </ButtonRow>
+                </View>
+              ) : null}
             </>
           )}
           {input('batchNo', 'Batch', d.batchNo, (t) => onChange({ batchNo: t }))}

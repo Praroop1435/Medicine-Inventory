@@ -9,6 +9,7 @@ import type {
   StockEvent,
 } from '@/domain/types';
 import { descendantIds } from '@/domain/tree';
+import { DEFAULT_UNITS, cleanUnit } from '@/domain/types';
 import { newId } from '@/lib/ids';
 import type { CheckSession, Repos, Unsub } from '../repositories';
 import { planIntake } from '../shared/intake';
@@ -93,6 +94,7 @@ export function createMemoryRepos(now: () => number = Date.now): Repos {
             alertDays: { ...DEFAULT_ALERT_DAYS },
             notifyTime: DEFAULT_NOTIFY_TIME,
             joinSecret,
+            units: [...DEFAULT_UNITS],
           },
           devices: [{ id: deviceId, displayName, joinedAt: now(), removed: false }],
           categories: CATEGORIES.map((n, order) => ({
@@ -123,6 +125,12 @@ export function createMemoryRepos(now: () => number = Date.now): Repos {
       watchShop: (shopId, cb) => watch(shopId, (s) => s.shop, cb),
       updateShop: (shopId, patch, deviceId) =>
         write(shopId, deviceId, (s) => void Object.assign(s.shop, patch)),
+      addUnit: (shopId, unit, deviceId) =>
+        write(shopId, deviceId, (s) => {
+          const u = cleanUnit(unit);
+          const list = s.shop.units?.length ? s.shop.units : [...DEFAULT_UNITS];
+          s.shop.units = list.includes(u) ? list : [...list, u];
+        }),
       watchDevices: (shopId, cb) => watch(shopId, (s) => s.devices, cb),
       async renameDevice(shopId, deviceId, name) {
         const d = get(shopId).devices.find((x) => x.id === deviceId);

@@ -1,8 +1,26 @@
 export type YearMonth = { year: number; month: number }; // month 1-12
 export type BatchStatus = 'expired' | 'soon' | 'watch' | 'ok';
 export type AlertDays = { first: number; second: number };
-export const UNITS = ['carton', 'box', 'strip', 'bottle', 'tube', 'can', 'piece'] as const;
-export type Unit = (typeof UNITS)[number];
+/** Any text: shops add their own. New shops start from this list. */
+export type Unit = string;
+export const DEFAULT_UNITS: readonly string[] = [
+  'strip',
+  'tablet',
+  'capsule',
+  'bottle',
+  'carton',
+  'box',
+  'tube',
+  'can',
+  'piece',
+  'sachet',
+  'vial',
+  'ampoule',
+  'jar',
+  'inhaler',
+  'drops',
+  'packet',
+];
 
 export type Shop = {
   id: string;
@@ -10,6 +28,8 @@ export type Shop = {
   alertDays: AlertDays;
   notifyTime: string;
   joinSecret: string;
+  /** Missing on shops made before custom units; read through shopUnits(). */
+  units?: string[];
 };
 export type Device = { id: string; displayName: string; joinedAt: number; removed: boolean };
 export type Category = {
@@ -59,3 +79,13 @@ export type StockEvent = {
   /** On `added` events: the bill that brought the stock in, if any. */
   billId?: string | null;
 };
+
+export const shopUnits = (shop: Shop | null): readonly string[] =>
+  shop?.units?.length ? shop.units : DEFAULT_UNITS;
+
+/** Trimmed lowercase unit, or throws when blank or over 24 characters. */
+export function cleanUnit(raw: string): string {
+  const u = raw.trim().toLowerCase();
+  if (!u || u.length > 24) throw new Error('Unit must be 1 to 24 characters');
+  return u;
+}

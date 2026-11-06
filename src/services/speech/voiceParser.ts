@@ -1,7 +1,8 @@
 import { applyMatch, emptyDraft, type DraftBatch, type DraftField } from '@/domain/draft';
 import { parseExpiry } from '@/domain/expiry';
 import { normalizeName } from '@/domain/matching';
-import { UNITS, type Company, type Medicine, type Unit } from '@/domain/types';
+import type { Company, Medicine } from '@/domain/types';
+import { matchUnit } from '../bulk/sheetParser';
 
 const WORDS = [
   'zero one two three four five six seven eight nine ten',
@@ -40,9 +41,6 @@ function parseNumber(ts: string[]): number | null {
   return total;
 }
 
-const unitOf = (t: string): Unit | null =>
-  UNITS.find((u) => t === u || t === `${u}s` || t === `${u}es`) ?? null;
-
 /** Reads "<month> <year>" at the start of ts; returns the YearMonth text and tokens used. */
 function readExpiry(ts: string[]): { text: string; used: number } | null {
   let m: number | null = null;
@@ -64,6 +62,7 @@ export function parseVoiceEntry(
   transcript: string,
   medicines: Medicine[],
   companies: Company[],
+  units: readonly string[],
 ): DraftBatch {
   const toks = transcript.replace(/[,]/g, ' , ').replace(/[.]/g, ' ').split(/\s+/).filter(Boolean);
   const low = toks.map((t) => t.toLowerCase());
@@ -73,7 +72,7 @@ export function parseVoiceEntry(
 
   // Trailing "<qty> <unit>".
   let end = toks.length;
-  const unit = end && unitOf(low[end - 1]);
+  const unit = end && matchUnit(low[end - 1], units);
   if (unit) end--;
 
   let expiry = null;

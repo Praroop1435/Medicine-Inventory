@@ -393,6 +393,19 @@ describe('manual entry', () => {
     expect(cats.find((c) => c.id === dry)?.parentId).toBe(s.cat('Cough syrups'));
   });
 
+  it('"+ Add unit" adds a custom unit to the shop and selects it', async () => {
+    const s = await seed();
+    await renderRouter(routes(s.repos), { initialUrl: '/intake/manual' });
+    await fireEvent.changeText(await screen.findByLabelText('Medicine name'), 'Zincovit');
+    await fireEvent.press(screen.getByRole('button', { name: '+ Add unit' }));
+    await fireEvent.changeText(screen.getByLabelText('New unit'), ' Kit ');
+    await fireEvent.press(screen.getByRole('button', { name: 'Add' }));
+    expect(await screen.findByRole('button', { name: 'Kit' })).toBeSelected();
+    let shop: import('@/domain/types').Shop | null = null;
+    s.repos.shop.watchShop(s.shopId, (x) => (shop = x))();
+    expect((shop as unknown as import('@/domain/types').Shop).units).toContain('kit');
+  });
+
   it('Save & next saves one row and clears only name, batch, expiry and quantity', async () => {
     const s = await seed();
     const spy = jest.spyOn(s.repos.inventory, 'saveIntake');

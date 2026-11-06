@@ -24,6 +24,8 @@ export interface ShopRepo {
     patch: Partial<Pick<Shop, 'name' | 'alertDays' | 'notifyTime'>>,
     deviceId: string,
   ): Promise<void>;
+  /** Adds a unit to the shop's list (trimmed, lowercase); a no-op when already there. */
+  addUnit(shopId: string, unit: string, deviceId: string): Promise<void>;
   watchDevices(shopId: string, cb: (d: Device[]) => void): Unsub;
   renameDevice(shopId: string, deviceId: string, name: string): Promise<void>;
   removeDevice(shopId: string, deviceId: string, byDeviceId: string): Promise<void>;
