@@ -31,6 +31,7 @@ const expoConfig: ExpoConfig = {
     '@react-native-firebase/auth',
     'expo-secure-store',
     'expo-sharing',
+    'expo-notifications',
     ['expo-speech-recognition', { microphonePermission: 'Used to add stock by voice' }],
     ['expo-image-picker', { photosPermission: 'Used to pick a photo of a bill.' }],
     ['expo-camera', { cameraPermission: 'Used to scan the shop QR code and bills.' }],

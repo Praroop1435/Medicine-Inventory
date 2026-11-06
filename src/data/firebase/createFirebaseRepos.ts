@@ -22,6 +22,7 @@ import {
   type WriteBatch,
 } from '@react-native-firebase/firestore';
 import {
+  DEFAULT_NIGHT_TIME,
   DEFAULT_UNITS,
   cleanUnit,
   type Batch,
@@ -198,6 +199,7 @@ export function createFirebaseRepos(opts: { onWriteError?: (e: Error) => void } 
           name,
           alertDays: { ...DEFAULT_ALERT_DAYS },
           notifyTime: DEFAULT_NOTIFY_TIME,
+          nightTime: DEFAULT_NIGHT_TIME,
           joinSecret,
           units: [...DEFAULT_UNITS],
         });

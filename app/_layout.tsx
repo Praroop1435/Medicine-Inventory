@@ -3,6 +3,7 @@ import { createAppRepos } from '@/data/firebase';
 import type { Repos } from '@/data/repositories';
 import { AppShell } from '@/features/shared/AppShell';
 import { ToastProvider, useToast } from '@/features/shared/Toast';
+import { expoNotifier } from '@/services/notifications/expo';
 import { ErrorState, Screen } from '@/ui';
 import { useAppFonts } from '@/ui/fonts';
 
@@ -37,7 +38,7 @@ function Root() {
       </Screen>
     );
   if (!repos) return null;
-  return <AppShell repos={repos} />;
+  return <AppShell repos={repos} notifier={expoNotifier} />;
 }
 
 export default function RootLayout() {

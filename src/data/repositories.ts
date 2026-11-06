@@ -21,7 +21,7 @@ export interface ShopRepo {
   watchShop(shopId: string, cb: (s: Shop) => void): Unsub;
   updateShop(
     shopId: string,
-    patch: Partial<Pick<Shop, 'name' | 'alertDays' | 'notifyTime'>>,
+    patch: Partial<Pick<Shop, 'name' | 'alertDays' | 'notifyTime' | 'nightTime'>>,
     deviceId: string,
   ): Promise<void>;
   /** Adds a unit to the shop's list (trimmed, lowercase); a no-op when already there. */

@@ -1,10 +1,12 @@
 import { Redirect } from 'expo-router';
 import { Tabs } from 'expo-router/js-tabs';
 import { useSession } from '@/features/onboarding/SessionContext';
+import { useDailyAlert } from '@/features/shared/hooks/useDailyAlert';
 import { TabBar } from '@/features/shared/TabBar';
 
 export default function TabsLayout() {
   const { session } = useSession();
+  useDailyAlert();
   // A saved session goes straight here; joinShop is never called again for it.
   if (!session) return <Redirect href="/onboarding" />;
   return (

@@ -27,6 +27,8 @@ export type Shop = {
   name: string;
   alertDays: AlertDays;
   notifyTime: string;
+  /** Night stock reminder, "HH:MM". Missing on shops made before it; read with a default. */
+  nightTime?: string;
   joinSecret: string;
   /** Missing on shops made before custom units; read through shopUnits(). */
   units?: string[];
@@ -79,6 +81,9 @@ export type StockEvent = {
   /** On `added` events: the bill that brought the stock in, if any. */
   billId?: string | null;
 };
+
+export const DEFAULT_NIGHT_TIME = '21:00';
+export const shopNightTime = (shop: Shop): string => shop.nightTime ?? DEFAULT_NIGHT_TIME;
 
 export const shopUnits = (shop: Shop | null): readonly string[] =>
   shop?.units?.length ? shop.units : DEFAULT_UNITS;

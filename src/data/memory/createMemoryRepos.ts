@@ -9,7 +9,7 @@ import type {
   StockEvent,
 } from '@/domain/types';
 import { descendantIds } from '@/domain/tree';
-import { DEFAULT_UNITS, cleanUnit } from '@/domain/types';
+import { DEFAULT_NIGHT_TIME, DEFAULT_UNITS, cleanUnit } from '@/domain/types';
 import { newId } from '@/lib/ids';
 import type { CheckSession, Repos, Unsub } from '../repositories';
 import { planIntake } from '../shared/intake';
@@ -93,6 +93,7 @@ export function createMemoryRepos(now: () => number = Date.now): Repos {
             name,
             alertDays: { ...DEFAULT_ALERT_DAYS },
             notifyTime: DEFAULT_NOTIFY_TIME,
+            nightTime: DEFAULT_NIGHT_TIME,
             joinSecret,
             units: [...DEFAULT_UNITS],
           },

@@ -189,6 +189,7 @@ export function runInventoryContract(make: () => Repos): void {
     const s = last<import('@/domain/types').Shop>((cb) => r.shop.watchShop(shopId, cb));
     expect(s.alertDays).toEqual({ first: 90, second: 30 });
     expect(s.notifyTime).toBe('09:00');
+    expect(s.nightTime).toBe('21:00');
     expect(s.joinSecret.length).toBeGreaterThanOrEqual(24);
   });
 
