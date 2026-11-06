@@ -1,6 +1,6 @@
 import { router, useLocalSearchParams } from 'expo-router';
-import { useEffect, useRef, useState } from 'react';
-import { View } from 'react-native';
+import { useEffect, useMemo, useRef, useState } from 'react';
+import { FlatList, View } from 'react-native';
 import { useRepos } from '@/data/RepoContext';
 import type { CheckSession } from '@/data/repositories';
 import { batchStatus, formatExpiry } from '@/domain/expiry';
@@ -47,6 +47,8 @@ export function CheckScreen() {
   // Batch whose count of 0 waits for "Close batch".
   const [closing, setClosing] = useState<Batch | null>(null);
   const finishing = useRef(false);
+  const medicinesById = useMemo(() => new Map(medicines.map((m) => [m.id, m])), [medicines]);
+  const companiesById = useMemo(() => new Map(companies.map((c) => [c.id, c])), [companies]);
   const shopId = session?.shopId;
   const deviceId = session?.deviceId;
 
@@ -80,10 +82,10 @@ export function CheckScreen() {
   const scope = new Set([category.id, ...descendantIds(categories, category.id)]);
   const depth = pathOf(categories, category.id).length;
   const rows: Row[] = batches.flatMap((batch) => {
-    const m = medicines.find((x) => x.id === batch.medicineId);
+    const m = medicinesById.get(batch.medicineId);
     if (!m || !scope.has(m.categoryId)) return [];
     const folder = pathOf(categories, m.categoryId).slice(depth).join(' › ');
-    const company = companies.find((c) => c.id === m.companyId)?.name ?? '';
+    const company = companiesById.get(m.companyId)?.name ?? '';
     return [
       { batch, name: m.name, folder, company, group: folder ? `${folder} · ${company}` : company },
     ];
@@ -96,7 +98,8 @@ export function CheckScreen() {
       a.batch.expiry.year - b.batch.expiry.year ||
       a.batch.expiry.month - b.batch.expiry.month,
   );
-  const groups = [...new Set(rows.map((r) => r.group))];
+  const groups = new Map<string, Row[]>();
+  for (const r of rows) groups.set(r.group, [...(groups.get(r.group) ?? []), r]);
   const ticks = progress?.checked ?? {};
   const done = rows.filter((r) => ticks[r.batch.id]).length;
   const total = rows.length;
@@ -129,6 +132,7 @@ export function CheckScreen() {
 
   return (
     <Screen
+      list
       back="Check"
       title={pathLabel(categories, category.id)}
       meta={`${done} of ${total} batch${total === 1 ? '' : 'es'} checked${lastName ? ` · ${lastName}` : ''}`}
@@ -169,26 +173,35 @@ export function CheckScreen() {
           onCancel={() => setClosing(null)}
         />
       )}
-      {total > 0 ? (
-        <T size={14} color={tokens.color.muted} style={{ paddingBottom: tokens.space[3] }}>
-          Tap ✓ when the shelf matches, or change the number.
-        </T>
-      ) : null}
-      <ProgressBar value={total ? done / total : 0} />
-      {total === 0 ? (
-        <EmptyState
-          icon="clipboard"
-          title="Nothing to count here"
-          body="Add a batch to this folder, then check it against the shelf."
-        />
-      ) : null}
-      {groups.map((g) => (
-        <View key={g}>
-          <SectionHeader title={g} />
-          <Card>
-            {rows
-              .filter((r) => r.group === g)
-              .map(({ batch: b, name }) => {
+      <FlatList
+        data={[...groups]}
+        keyExtractor={([g]) => g}
+        keyboardShouldPersistTaps="handled"
+        // shortcut: virtualizes per company group, not per row; split a group if one grows huge.
+        initialNumToRender={10}
+        contentContainerStyle={{ paddingBottom: tokens.space[6] }}
+        ListHeaderComponent={
+          <>
+            {total > 0 ? (
+              <T size={14} color={tokens.color.muted} style={{ paddingBottom: tokens.space[3] }}>
+                Tap ✓ when the shelf matches, or change the number.
+              </T>
+            ) : null}
+            <ProgressBar value={total ? done / total : 0} />
+            {total === 0 ? (
+              <EmptyState
+                icon="clipboard"
+                title="Nothing to count here"
+                body="Add a batch to this folder, then check it against the shelf."
+              />
+            ) : null}
+          </>
+        }
+        renderItem={({ item: [g, list] }) => (
+          <View>
+            <SectionHeader title={g} />
+            <Card>
+              {list.map(({ batch: b, name }) => {
                 const expired = batchStatus(b.expiry, today, shop.alertDays) === 'expired';
                 const ticked = !!ticks[b.id] && edits[b.id] === undefined;
                 return (
@@ -243,9 +256,10 @@ export function CheckScreen() {
                   </View>
                 );
               })}
-          </Card>
-        </View>
-      ))}
+            </Card>
+          </View>
+        )}
+      />
     </Screen>
   );
 }
