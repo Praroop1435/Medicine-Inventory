@@ -1,5 +1,3 @@
-import { draftIssues } from '@/domain/draft';
-import { findMedicineMatch, normalizeName } from '@/domain/matching';
 import type {
   Batch,
   Bill,
@@ -12,18 +10,18 @@ import type {
 } from '@/domain/types';
 import { newId } from '@/lib/ids';
 import type { Repos, Unsub } from '../repositories';
-
-const CATEGORIES = [
-  'Antibiotics',
-  'Cough syrups',
-  'Pain relief',
-  'Balms',
-  'Lotions',
-  'Eye/ear drops',
-  'Tablets (general)',
-  'Vitamins',
-  'Others',
-];
+import { planIntake } from '../shared/intake';
+import {
+  CATEGORIES,
+  DEFAULT_ALERT_DAYS,
+  DEFAULT_NOTIFY_TIME,
+  checkMerge,
+  newJoinSecret,
+  returnChange,
+  sellOneChange,
+  setCountChange,
+  type StockChange,
+} from '../shared/mutations';
 
 type ShopState = {
   shop: Shop;
@@ -35,16 +33,6 @@ type ShopState = {
   bills: Bill[];
   events: StockEvent[];
 };
-
-const secret = () =>
-  Array.from({ length: 3 }, () => Math.random().toString(36).slice(2, 10).padEnd(8, '0')).join('');
-const same = (a: string, b: string) => a.trim().toLowerCase() === b.trim().toLowerCase();
-
-function checkMerge(fromId: string, intoId: string, all: { id: string }[]) {
-  if (fromId === intoId) throw new Error('cannot merge into the same record');
-  if (!all.some((x) => x.id === fromId) || !all.some((x) => x.id === intoId))
-    throw new Error('record not found');
-}
 
 export function createMemoryRepos(now: () => number = Date.now): Repos {
   const shops = new Map<string, ShopState>();
@@ -77,22 +65,10 @@ export function createMemoryRepos(now: () => number = Date.now): Repos {
     shops.set(shopId, s);
     notify();
   };
-  const event = (
-    s: ShopState,
-    b: Batch,
-    type: StockEvent['type'],
-    delta: number,
-    deviceId: string,
-  ) =>
-    s.events.push({
-      id: newId(),
-      batchId: b.id,
-      medicineId: b.medicineId,
-      type,
-      delta,
-      deviceId,
-      at: now(),
-    });
+  const applyChange = (s: ShopState, c: StockChange) => {
+    s.batches = s.batches.map((b) => (b.id === c.batch.id ? c.batch : b));
+    s.events.push(c.event);
+  };
   const batchOf = (s: ShopState, id: string) => {
     const b = s.batches.find((x) => x.id === id);
     if (!b) throw new Error('batch not found');
@@ -104,13 +80,13 @@ export function createMemoryRepos(now: () => number = Date.now): Repos {
       async createShop(name, displayName) {
         const shopId = newId();
         const deviceId = newId();
-        const joinSecret = secret();
+        const joinSecret = newJoinSecret();
         shops.set(shopId, {
           shop: {
             id: shopId,
             name,
-            alertDays: { first: 90, second: 30 },
-            notifyTime: '09:00',
+            alertDays: { ...DEFAULT_ALERT_DAYS },
+            notifyTime: DEFAULT_NOTIFY_TIME,
             joinSecret,
           },
           devices: [{ id: deviceId, displayName, joinedAt: now(), removed: false }],
@@ -153,7 +129,7 @@ export function createMemoryRepos(now: () => number = Date.now): Repos {
           if (d) d.removed = true;
         }),
       async rotateJoinSecret(shopId, byDeviceId) {
-        const next = secret();
+        const next = newJoinSecret();
         await write(shopId, byDeviceId, (s) => void (s.shop.joinSecret = next));
         return next;
       },
@@ -178,77 +154,29 @@ export function createMemoryRepos(now: () => number = Date.now): Repos {
         ),
       saveIntake: (shopId, drafts, bill, deviceId) =>
         write(shopId, deviceId, (s) => {
-          const billId = bill ? newId() : null;
-          if (bill && billId) s.bills.push({ ...bill, id: billId, createdAt: now() });
-          for (const d of drafts) {
-            let med =
-              s.medicines.find((m) => m.id === d.matchedMedicineId) ??
-              findMedicineMatch(d.medicineName, s.medicines);
-            if (draftIssues({ ...d, matchedMedicineId: med?.id ?? null }).length || !d.expiry)
-              throw new Error('incomplete draft');
-            if (d.expiry.month < 1 || d.expiry.month > 12) throw new Error('invalid expiry');
-            if (!med) {
-              if (!d.categoryId || !d.unit) throw new Error('incomplete draft');
-              const cn = normalizeName(d.companyName);
-              let co = s.companies.find((c) => normalizeName(c.name) === cn);
-              if (!co) s.companies.push((co = { id: newId(), name: d.companyName.trim() }));
-              s.medicines.push(
-                (med = {
-                  id: newId(),
-                  name: d.medicineName.trim(),
-                  categoryId: d.categoryId,
-                  companyId: co.id,
-                  unit: d.unit,
-                }),
-              );
-            }
-            const existing = s.batches.find(
-              (b) => b.status === 'active' && b.medicineId === med.id && same(b.batchNo, d.batchNo),
-            );
-            if (existing) {
-              existing.qty += d.qty!;
-              event(s, existing, 'added', d.qty!, deviceId);
-            } else {
-              const b: Batch = {
-                id: newId(),
-                medicineId: med.id,
-                batchNo: d.batchNo.trim(),
-                expiry: d.expiry!,
-                qty: d.qty!,
-                billId,
-                status: 'active',
-                createdAt: now(),
-              };
-              s.batches.push(b);
-              event(s, b, 'added', d.qty!, deviceId);
-            }
+          const p = planIntake(s, drafts, bill, deviceId, now());
+          if (p.bill) s.bills.push(p.bill);
+          s.companies.push(...p.companies);
+          s.medicines.push(...p.medicines);
+          for (const b of p.batches) {
+            const i = s.batches.findIndex((x) => x.id === b.id);
+            if (i >= 0) s.batches[i] = b;
+            else s.batches.push(b);
           }
+          s.events.push(...p.events);
         }),
       sellOne: (shopId, batchId, deviceId) =>
-        write(shopId, deviceId, (s) => {
-          const b = batchOf(s, batchId);
-          if (b.status !== 'active' || b.qty < 1) throw new Error('no stock to sell');
-          b.qty -= 1;
-          if (b.qty === 0) b.status = 'removed';
-          event(s, b, 'sold', -1, deviceId);
-        }),
+        write(shopId, deviceId, (s) =>
+          applyChange(s, sellOneChange(batchOf(s, batchId), deviceId, now())),
+        ),
       setCount: (shopId, batchId, qty, deviceId, type) =>
-        write(shopId, deviceId, (s) => {
-          if (!Number.isInteger(qty) || qty < 0) throw new Error('invalid quantity');
-          const b = batchOf(s, batchId);
-          if (b.status !== 'active') throw new Error('batch is not active');
-          const old = b.qty;
-          b.qty = qty;
-          if (qty === 0) b.status = 'removed';
-          event(s, b, type, qty - old, deviceId);
-        }),
+        write(shopId, deviceId, (s) =>
+          applyChange(s, setCountChange(batchOf(s, batchId), qty, type, deviceId, now())),
+        ),
       markReturned: (shopId, batchId, deviceId) =>
-        write(shopId, deviceId, (s) => {
-          const b = batchOf(s, batchId);
-          if (b.status !== 'active') throw new Error('batch is not active');
-          b.status = 'returned';
-          event(s, b, 'returned', -b.qty, deviceId);
-        }),
+        write(shopId, deviceId, (s) =>
+          applyChange(s, returnChange(batchOf(s, batchId), deviceId, now())),
+        ),
       async upsertCategory(shopId, c) {
         const s = get(shopId);
         const id = c.id ?? newId();
