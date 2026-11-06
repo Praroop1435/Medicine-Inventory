@@ -2,6 +2,8 @@ import { ExpoSpeechRecognitionModule } from 'expo-speech-recognition';
 import { PermissionDenied, type SpeechEngine } from './SpeechEngine';
 
 let last = '';
+let starting = false;
+let cancelled = false;
 let subs: { remove(): void }[] = [];
 const clear = () => {
   subs.forEach((s) => s.remove());
@@ -11,8 +13,13 @@ const clear = () => {
 export const nativeSpeechEngine: SpeechEngine = {
   isAvailable: async () => ExpoSpeechRecognitionModule.isRecognitionAvailable(),
   async start(onPartial) {
-    const perm = await ExpoSpeechRecognitionModule.requestPermissionsAsync();
+    starting = true;
+    cancelled = false;
+    const perm = await ExpoSpeechRecognitionModule.requestPermissionsAsync().finally(() => {
+      starting = false;
+    });
     if (!perm.granted) throw new PermissionDenied();
+    if (cancelled) return; // stop() arrived while the permission prompt was open
     clear();
     last = '';
     subs.push(
@@ -25,6 +32,10 @@ export const nativeSpeechEngine: SpeechEngine = {
   },
   stop: () =>
     new Promise((resolve) => {
+      if (starting) {
+        cancelled = true;
+        return resolve('');
+      }
       // shortcut: 2s cap if the engine never emits `end`, fine until a device shows otherwise.
       const done = () => {
         clearTimeout(timer);

@@ -77,20 +77,21 @@ export function parseVoiceEntry(
   if (unit) end--;
 
   let expiry = null;
+  const expiryFirst = ei >= 0 && bi > ei;
   let qtyStart = end;
   let rest: string[] = [];
   if (ei >= 0) {
-    rest = low.slice(ei + 1, end).filter((t) => t !== ',');
+    rest = low.slice(ei + 1, expiryFirst ? bi : end).filter((t) => t !== ',');
     const r = readExpiry(rest);
     if (r) {
       expiry = parseExpiry(r.text);
       rest = rest.slice(r.used);
-      qtyStart = end - rest.length;
+      if (!expiryFirst) qtyStart = end - rest.length;
     }
   }
   let qty: number | null = null;
   if (unit) {
-    if (ei >= 0 && expiry) qty = parseNumber(rest);
+    if (ei >= 0 && expiry && !expiryFirst) qty = parseNumber(rest);
     else {
       // shortcut: without a readable expiry only the last number (or tens+ones) is taken as qty.
       let s = end - 1;

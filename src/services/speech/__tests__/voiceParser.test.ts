@@ -81,4 +81,15 @@ describe('parseVoiceEntry', () => {
     expect(d.medicineName).toBe('Azithral 500');
     expect(d.companyName).toBe('Alembic');
   });
+
+  it('reads expiry before batch', () => {
+    const d = parseVoiceEntry('Crocin expiry nov 26 batch c 1 2 5 strips', [], []);
+    expect(d).toMatchObject({
+      medicineName: 'Crocin',
+      batchNo: 'C12',
+      expiry: { year: 2026, month: 11 },
+      qty: 5,
+      unit: 'strip',
+    });
+  });
 });

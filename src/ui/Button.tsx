@@ -5,7 +5,7 @@ import { tokens } from './tokens';
 type Props = {
   label: string;
   variant?: 'primary' | 'secondary';
-  onPress?: () => void;
+  onPress: () => void;
   onPressIn?: () => void;
   onPressOut?: () => void;
   disabled?: boolean;

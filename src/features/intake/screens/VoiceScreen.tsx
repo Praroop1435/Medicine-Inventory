@@ -1,5 +1,5 @@
 import { router } from 'expo-router';
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { View } from 'react-native';
 import type { DraftBatch } from '@/domain/draft';
 import { useInventory } from '@/features/shared/hooks/useInventory';
@@ -19,29 +19,49 @@ export function VoiceScreen({ engine = nativeSpeechEngine }: { engine?: SpeechEn
   const [transcript, setTranscript] = useState('');
   const [list, setList] = useState<DraftBatch[]>([]);
   const [listening, setListening] = useState(false);
+  // Refs, not state: a quick tap releases before any re-render or before start() resolves.
+  const phase = useRef<'idle' | 'starting' | 'on'>('idle');
+  const held = useRef(false);
+  const touched = useRef(false);
 
   useEffect(() => {
     engine.isAvailable().then(setAvailable, () => setAvailable(false));
   }, [engine]);
 
+  const finish = async () => {
+    phase.current = 'idle';
+    setListening(false);
+    const t = await engine.stop().catch(() => '');
+    if (t) setTranscript(t);
+  };
   const press = async () => {
+    if (phase.current !== 'idle') return;
+    phase.current = 'starting';
+    held.current = true;
     setListening(true);
     try {
       await engine.start(setTranscript);
     } catch (e) {
+      phase.current = 'idle';
       setListening(false);
       toast(
         e instanceof PermissionDenied
           ? 'Microphone permission is needed for voice'
           : 'Could not start listening',
       );
+      return;
     }
+    phase.current = 'on';
+    if (!held.current) await finish(); // released while the permission prompt was open
   };
   const release = async () => {
-    if (!listening) return;
-    setListening(false);
-    const t = await engine.stop().catch(() => '');
-    if (t) setTranscript(t);
+    held.current = false;
+    if (phase.current === 'on') await finish();
+  };
+  // Screen readers fire only onPress: toggle. Touch fires pressIn first, so skip that press.
+  const toggle = () => {
+    if (touched.current) return void (touched.current = false);
+    return phase.current === 'idle' ? press() : release();
   };
   const next = () => {
     setList((l) => [...l, parseVoiceEntry(transcript, medicines, companies)]);
@@ -76,8 +96,11 @@ export function VoiceScreen({ engine = nativeSpeechEngine }: { engine?: SpeechEn
         <Button
           label="Hold to speak"
           full
-          onPress={() => {}}
-          onPressIn={press}
+          onPress={toggle}
+          onPressIn={() => {
+            touched.current = true;
+            press();
+          }}
           onPressOut={release}
         />
         <Card>

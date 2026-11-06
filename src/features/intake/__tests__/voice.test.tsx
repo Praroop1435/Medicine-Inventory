@@ -1,4 +1,4 @@
-import { fireEvent, renderRouter, screen } from 'expo-router/testing-library';
+import { act, fireEvent, renderRouter, screen } from 'expo-router/testing-library';
 import { createMemoryRepos } from '@/data/memory/createMemoryRepos';
 import { AppShell } from '@/features/shared/AppShell';
 import { ToastProvider } from '@/features/shared/Toast';
@@ -103,5 +103,39 @@ describe('voice screen', () => {
     await start(e);
     await speak();
     expect(await screen.findByText('Microphone permission is needed for voice')).toBeOnTheScreen();
+  });
+
+  it('stops once start resolves when released during the permission prompt', async () => {
+    let open: () => void = () => {};
+    const e = fake(true, ['Crocin batch b2']);
+    e.start = () => new Promise<void>((r) => void (open = r));
+    const stop = jest.spyOn(e, 'stop');
+    await start(e);
+    const mic = await screen.findByRole('button', { name: 'Hold to speak' });
+    await fireEvent(mic, 'pressIn');
+    await fireEvent(mic, 'pressOut');
+    expect(stop).not.toHaveBeenCalled();
+    await act(async () => open());
+    expect(stop).toHaveBeenCalledTimes(1);
+  });
+
+  it('stops after a quick tap', async () => {
+    const e = fake(true, ['Crocin batch b2']);
+    const stop = jest.spyOn(e, 'stop');
+    await start(e);
+    await speak();
+    expect(stop).toHaveBeenCalledTimes(1);
+  });
+
+  it('toggles listening on a bare press for screen readers', async () => {
+    const e = fake(true, ['Crocin batch b2']);
+    const startSpy = jest.spyOn(e, 'start');
+    const stop = jest.spyOn(e, 'stop');
+    await start(e);
+    const mic = await screen.findByRole('button', { name: 'Hold to speak' });
+    await fireEvent.press(mic);
+    expect(startSpy).toHaveBeenCalledTimes(1);
+    await fireEvent.press(mic);
+    expect(stop).toHaveBeenCalledTimes(1);
   });
 });
