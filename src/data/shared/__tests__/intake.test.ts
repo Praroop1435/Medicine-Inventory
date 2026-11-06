@@ -76,6 +76,12 @@ describe('planIntake', () => {
     ]);
   });
 
+  it('passes a scanned pack onto a new medicine only', () => {
+    const p = planIntake(empty, [draft({ packInfo: '1*30ML' })], null, 'd1', 1);
+    expect(p.medicines[0].packInfo).toBe('1*30ML');
+    expect('packInfo' in planIntake(empty, [draft()], null, 'd1', 1).medicines[0]).toBe(false);
+  });
+
   it('reuses a company by normalized name', () => {
     const p = planIntake(
       { ...empty, companies: [{ id: 'co9', name: 'Sun-Pharma' }] },

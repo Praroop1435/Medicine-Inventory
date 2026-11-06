@@ -15,6 +15,8 @@ export const mlkitOcrEngine: OcrEngine = {
               top: w.frame.top,
               left: w.frame.left,
               height: w.frame.height,
+              width: w.frame.width,
+              corners: w.cornerPoints,
             });
         }
     return out;

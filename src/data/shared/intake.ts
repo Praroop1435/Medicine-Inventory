@@ -62,6 +62,7 @@ export function planIntake(
         categoryId: d.categoryId,
         companyId: co.id,
         unit: d.unit,
+        ...(d.packInfo ? { packInfo: d.packInfo } : {}),
       };
       medicines.push(med);
       plan.medicines.push(med);

@@ -1,7 +1,8 @@
 import { readFileSync } from 'fs';
 import { join } from 'path';
 import type { OcrLine } from '../OcrEngine';
-import { parseBillText, qtyFromToken } from '../billParser';
+import { normalizeOrientation, parseBillText, qtyFromToken } from '../billParser';
+import { realBillLines, rotated } from '../__fixtures__/real-bill-swastik';
 
 const lines: OcrLine[] = readFileSync(
   join(__dirname, '../__fixtures__/bill-raj-pharma.txt'),
@@ -215,5 +216,85 @@ describe('column rules', () => {
     );
     expect(d.qty).toBe(98);
     expect(d.uncertain).toContain('qty');
+  });
+});
+
+describe('real distributor bill (Swastik layout)', () => {
+  const strip = (r: ReturnType<typeof parseBillText>) => ({
+    header: r.header,
+    drafts: r.drafts.map(({ key: _key, ...d }) => d),
+  });
+  const real = parseBillText(realBillLines);
+
+  it('reads the header: supplier is the top-left block, not the M/S buyer', () => {
+    expect(real.header).toEqual({
+      supplier: 'SWASTIK AGENCIES',
+      billNo: '2185',
+      billDate: '02/11/26',
+    });
+  });
+
+  it('parses all 9 rows from the columns', () => {
+    expect(
+      real.drafts.map((d) => [
+        d.medicineName,
+        d.batchNo,
+        d.expiry,
+        d.qty,
+        d.companyName,
+        d.packInfo,
+      ]),
+    ).toEqual([
+      ['MOROFER SYP', 'VHL2606003', { year: 2027, month: 11 }, 40, 'MORAL PH', '1*300M'],
+      ['CLAVAM BID DRY SYP', '2642275', { year: 2028, month: 5 }, 36, 'ALKEM MA', '1*30ML'],
+      ['CLAVAM BID DRY SYP', '2641338', { year: 2028, month: 3 }, 18, 'ALKEM MA', '1*60ML'],
+      ['CLAVAM BID DRY SYP', '2643648', { year: 2028, month: 8 }, 18, 'ALKEM MA', '1*60ML'],
+      ['CLAVAM DRY SYP', '2642497', { year: 2028, month: 5 }, 36, 'ALKEM MA', '1*30ML'],
+      ['CLAVAM 625 TAB', '26441959', { year: 2027, month: 10 }, 24, 'ALKEM MA', '1*10'],
+      ['SUMO ACE TAB', '26230007', { year: 2028, month: 4 }, 20, 'ALKEM PL', '1*10'],
+      ['NOWORM SUSP', '26490871', { year: 2028, month: 7 }, 25, 'ALKEM AL', '1*10ML'],
+      ['SWICH 50MG DRY SYP', '26461024', { year: 2027, month: 11 }, 20, 'ALKEM NE', '1*30ML'],
+    ]);
+  });
+
+  it('flags expiry, batchNo and the truncated company on every row, nothing else', () => {
+    for (const d of real.drafts) expect(d.uncertain).toEqual(['expiry', 'batchNo', 'companyName']);
+  });
+
+  it('takes the bill date, not the due date, whichever comes first', () => {
+    const { header } = parseBillText([
+      { text: 'SHOP', top: 0, left: 0 },
+      { text: 'Due Date : 03/11/26 Date : 02/11/26', top: 30, left: 0 },
+    ]);
+    expect(header.billDate).toBe('02/11/26');
+  });
+
+  it('gives identical output for a sideways or upside-down photo', () => {
+    for (const deg of [90, 180, 270] as const)
+      expect(strip(parseBillText(rotated(realBillLines, deg)))).toEqual(strip(real));
+  });
+});
+
+describe('normalizeOrientation', () => {
+  it('leaves upright lines and lines without corners alone', () => {
+    expect(normalizeOrientation(realBillLines)).toEqual(realBillLines);
+    const plain: OcrLine[] = [{ text: 'a', top: 1, left: 2 }];
+    expect(normalizeOrientation(plain)).toEqual(plain);
+  });
+
+  it('turns a sideways photo back into reading orientation', () => {
+    const back = normalizeOrientation(rotated(realBillLines, 90));
+    const dx = realBillLines[0].left - back[0].left;
+    const dy = realBillLines[0].top - back[0].top;
+    back.forEach((l, i) => {
+      const o = realBillLines[i];
+      expect([l.text, l.left + dx, l.top + dy, l.width, l.height]).toEqual([
+        o.text,
+        o.left,
+        o.top,
+        o.width,
+        o.height,
+      ]);
+    });
   });
 });

@@ -16,6 +16,8 @@ export type DraftBatch = {
   qty: number | null;
   matchedMedicineId: string | null;
   uncertain: DraftField[];
+  /** Pack text from a scanned bill ("1*30ML"), stored on a newly created medicine. */
+  packInfo?: string;
 };
 
 let counter = 0;
