@@ -37,7 +37,7 @@ const expoConfig: ExpoConfig = {
     ['expo-camera', { cameraPermission: 'Used to scan the shop QR code and bills.' }],
     [
       'expo-splash-screen',
-      { backgroundColor: '#26344E', image: './assets/images/splash-icon.png', imageWidth: 76 },
+      { backgroundColor: '#26344E', image: './assets/images/splash-icon.png', imageWidth: 140 },
     ],
   ],
   extra: { ...cfg, eas: { projectId: cfg.easProjectId } },
