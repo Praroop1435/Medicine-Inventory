@@ -32,7 +32,8 @@ const tidy = (d: DraftBatch): DraftBatch =>
 
 /**
  * Applies a user edit. A field whose value actually changes stops being uncertain; any
- * name edit re-runs matching, and losing a match clears the category and unit it filled.
+ * name edit re-runs matching, and losing a match clears the category and unit it filled
+ * and marks the inherited company uncertain.
  */
 export function editDraft(
   d: DraftBatch,
@@ -50,7 +51,16 @@ export function editDraft(
   };
   if ('medicineName' in patch) {
     const m = applyMatch(next, medicines, companies);
-    next = m.matchedMedicineId || !d.matchedMedicineId ? m : { ...m, categoryId: null, unit: null };
+    next =
+      m.matchedMedicineId || !d.matchedMedicineId
+        ? m
+        : {
+            ...m,
+            categoryId: null,
+            unit: null,
+            // The company came from the lost match: keep it, but make a human confirm it.
+            uncertain: [...m.uncertain.filter((f) => f !== 'companyName'), 'companyName'],
+          };
   }
   return tidy(next);
 }
@@ -86,7 +96,9 @@ export function IntakeProvider({ children }: { children: ReactNode }) {
 
   const value: Intake = {
     ...state,
-    setDrafts: (ds, bill = null) => setState({ drafts: ds.map(tidy), bill }),
+    // Adapters needn't match: applyMatch is idempotent, so pre-matched drafts are unchanged.
+    setDrafts: (ds, bill = null) =>
+      setState({ drafts: ds.map((d) => tidy(applyMatch(d, medicines, companies))), bill }),
     update: (key, patch) => map(key, (d) => editDraft(d, patch, medicines, companies)),
     confirm: (key, field) => map(key, (d) => confirmField(d, field)),
     remove: (key) => setState((s) => ({ ...s, drafts: s.drafts.filter((d) => d.key !== key) })),

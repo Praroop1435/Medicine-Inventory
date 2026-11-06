@@ -1,5 +1,5 @@
 import { router, useLocalSearchParams } from 'expo-router';
-import { useState } from 'react';
+import { useRef, useState } from 'react';
 import { canSave, confirmField, emptyDraft, type DraftBatch } from '@/domain/draft';
 import type { Medicine } from '@/domain/types';
 import { useInventory } from '@/features/shared/hooks/useInventory';
@@ -31,8 +31,12 @@ function ManualForm({ medicine }: { medicine?: Medicine }) {
     medicine ? edit(emptyDraft('manual'), { medicineName: medicine.name }) : emptyDraft('manual'),
   );
   const [saving, setSaving] = useState(false);
+  // A second tap can land before the disabled state renders; a double save doubles the stock.
+  const inFlight = useRef(false);
 
   const saveNext = async () => {
+    if (inFlight.current) return;
+    inFlight.current = true;
     setSaving(true);
     try {
       await saveDrafts([draft], null);
@@ -43,6 +47,7 @@ function ManualForm({ medicine }: { medicine?: Medicine }) {
     } catch (e) {
       toast(e instanceof Error ? e.message : 'Something went wrong');
     } finally {
+      inFlight.current = false;
       setSaving(false);
     }
   };

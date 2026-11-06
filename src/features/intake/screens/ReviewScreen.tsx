@@ -1,5 +1,5 @@
 import { router } from 'expo-router';
-import { useState } from 'react';
+import { useRef, useState } from 'react';
 import { View } from 'react-native';
 import { canSave, draftIssues } from '@/domain/draft';
 import { useToast } from '@/features/shared/Toast';
@@ -14,12 +14,16 @@ export function ReviewScreen() {
   const { drafts, bill, update, confirm, remove, save } = useIntake();
   const toast = useToast();
   const [saving, setSaving] = useState(false);
+  // A second tap can land before the disabled state renders; a double save doubles the stock.
+  const inFlight = useRef(false);
   const flagged = drafts.map((d) => new Set([...d.uncertain, ...draftIssues(d)]).size);
   const fields = flagged.reduce((a, b) => a + b, 0);
   const rows = flagged.filter((x) => x > 0).length;
   const n = drafts.length;
 
   const onSave = async () => {
+    if (inFlight.current) return;
+    inFlight.current = true;
     setSaving(true);
     try {
       await save();
@@ -28,6 +32,7 @@ export function ReviewScreen() {
     } catch (e) {
       toast(e instanceof Error ? e.message : 'Something went wrong');
     } finally {
+      inFlight.current = false;
       setSaving(false);
     }
   };

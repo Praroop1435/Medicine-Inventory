@@ -2,13 +2,12 @@ import { useState, type ReactNode } from 'react';
 import { View } from 'react-native';
 import { draftIssues, type DraftBatch, type DraftField } from '@/domain/draft';
 import { formatExpiry, parseExpiry } from '@/domain/expiry';
-import type { Unit } from '@/domain/types';
+import { UNITS } from '@/domain/types';
 import { useInventory } from '@/features/shared/hooks/useInventory';
 import { Card, Chip, ChipRow, Field, IconButton, KeyValueRow, Pill, T, tokens } from '@/ui';
 import type { DraftPatch } from '../IntakeContext';
 import { MedicineAutocomplete } from './MedicineAutocomplete';
 
-const UNITS: Unit[] = ['carton', 'box', 'strip', 'bottle', 'tube', 'can', 'piece'];
 const NOUN: Record<DraftField, string> = {
   medicineName: 'name',
   companyName: 'company',

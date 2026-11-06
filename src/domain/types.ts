@@ -1,7 +1,8 @@
 export type YearMonth = { year: number; month: number }; // month 1-12
 export type BatchStatus = 'expired' | 'soon' | 'watch' | 'ok';
 export type AlertDays = { first: number; second: number };
-export type Unit = 'carton' | 'box' | 'strip' | 'bottle' | 'tube' | 'can' | 'piece';
+export const UNITS = ['carton', 'box', 'strip', 'bottle', 'tube', 'can', 'piece'] as const;
+export type Unit = (typeof UNITS)[number];
 
 export type Shop = {
   id: string;

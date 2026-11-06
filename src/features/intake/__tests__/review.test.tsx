@@ -1,13 +1,14 @@
 import { router } from 'expo-router';
-import { fireEvent, renderRouter, screen, within } from 'expo-router/testing-library';
+import { useState } from 'react';
+import { act, fireEvent, renderRouter, screen, within } from 'expo-router/testing-library';
 import { createMemoryRepos } from '@/data/memory/createMemoryRepos';
 import type { Repos } from '@/data/repositories';
 import { applyMatch, emptyDraft, type DraftBatch } from '@/domain/draft';
 import type { Batch, Category, Company, Medicine } from '@/domain/types';
 import { AppShell } from '@/features/shared/AppShell';
 import { ToastProvider } from '@/features/shared/Toast';
-import { Button } from '@/ui';
-import { useIntake, type BillHeader } from '../IntakeContext';
+import { Button, T } from '@/ui';
+import { useIntake, useSaveDrafts, type BillHeader } from '../IntakeContext';
 import ManualRoute from '../../../../app/intake/manual';
 import ReviewRoute from '../../../../app/intake/review';
 
@@ -24,14 +25,23 @@ let pending: { drafts: DraftBatch[]; bill?: BillHeader } = { drafts: [] };
 /** Stands in for a scan/voice/bulk adapter: hands drafts to the pipeline and opens review. */
 function Start() {
   const { setDrafts } = useIntake();
+  const saveDrafts = useSaveDrafts();
+  const [err, setErr] = useState('');
   return (
-    <Button
-      label="Open review"
-      onPress={() => {
-        setDrafts(pending.drafts, pending.bill);
-        router.push('/intake/review');
-      }}
-    />
+    <>
+      <Button
+        label="Open review"
+        onPress={() => {
+          setDrafts(pending.drafts, pending.bill);
+          router.push('/intake/review');
+        }}
+      />
+      <Button
+        label="Force save"
+        onPress={() => saveDrafts(pending.drafts, null).catch((e: Error) => setErr(e.message))}
+      />
+      {err ? <T>{err}</T> : null}
+    </>
   );
 }
 
@@ -137,6 +147,18 @@ async function start() {
 beforeEach(() => mockStore.clear());
 afterEach(() => jest.restoreAllMocks());
 
+type Fiber = { memoizedProps?: { onPress?: () => void }; return: Fiber | null };
+/** Two taps in one frame, before React re-renders the button as disabled. */
+async function doubleTap(el: unknown) {
+  let f: Fiber | null = (el as { unstable_fiber: Fiber }).unstable_fiber;
+  while (f && typeof f.memoizedProps?.onPress !== 'function') f = f.return;
+  const press = f!.memoizedProps!.onPress!;
+  await act(async () => {
+    press();
+    press();
+  });
+}
+
 const saveButton = () => screen.getByRole('button', { name: /^(Confirm|Save) / });
 const cards = () => screen.getAllByTestId('review-card');
 
@@ -217,8 +239,55 @@ describe('review screen', () => {
     expect(screen.getByText('New')).toBeOnTheScreen();
     expect(screen.getByRole('button', { name: 'Antibiotics' })).toBeOnTheScreen();
     expect(screen.getByRole('button', { name: 'Carton' })).toBeOnTheScreen();
-    expect(saveButton()).toHaveAccessibleName('Confirm 2 fields to save');
+    // The company came from the lost match, so it must be confirmed too.
+    expect(screen.getByLabelText('Company').props.value).toBe('Alembic');
+    expect(screen.getByText('Check company')).toBeOnTheScreen();
+    expect(saveButton()).toHaveAccessibleName('Confirm 3 fields to save');
     expect(saveButton()).toBeDisabled();
+    await fireEvent.press(screen.getByRole('button', { name: 'Looks right: company' }));
+    expect(saveButton()).toHaveAccessibleName('Confirm 2 fields to save');
+  });
+
+  it('matches drafts handed in by an adapter, dropping doubts the match settles', async () => {
+    await start();
+    await openReview([
+      {
+        ...emptyDraft('scan'),
+        medicineName: 'Azithral 500',
+        companyName: 'Alembc',
+        batchNo: 'AZ88',
+        expiry: { year: 2027, month: 5 },
+        qty: 2,
+        uncertain: ['companyName'],
+      },
+    ]);
+    expect(screen.queryByText('New')).toBeNull();
+    expect(screen.queryByRole('button', { name: 'Antibiotics' })).toBeNull();
+    expect(screen.getByText('Antibiotics')).toBeOnTheScreen();
+    expect(screen.getByText('Alembic')).toBeOnTheScreen();
+    expect(screen.queryByRole('button', { name: 'Looks right: company' })).toBeNull();
+    expect(saveButton()).toHaveAccessibleName('Save 1 item');
+  });
+
+  it('the save path refuses drafts a human has not confirmed', async () => {
+    const s = await start();
+    const spy = jest.spyOn(s.repos.inventory, 'saveIntake');
+    pending = { drafts: sixDrafts(s) };
+    await fireEvent.press(screen.getByRole('button', { name: 'Force save' }));
+    expect(await screen.findByText('Some fields still need a look')).toBeOnTheScreen();
+    expect(spy).not.toHaveBeenCalled();
+  });
+
+  it('a double tap on save writes once', async () => {
+    const s = await start();
+    const spy = jest
+      .spyOn(s.repos.inventory, 'saveIntake')
+      .mockImplementation(() => new Promise<void>((r) => setTimeout(r, 20)));
+    await openReview(sixDrafts(s).map((d) => ({ ...d, uncertain: [] })));
+    const b = screen.getByRole('button', { name: 'Save 6 items' });
+    await doubleTap(b);
+    expect(await screen.findByText('Saved 6 items')).toBeOnTheScreen();
+    expect(spy).toHaveBeenCalledTimes(1);
   });
 
   it('blocks save on an expiry it cannot read', async () => {
@@ -318,5 +387,21 @@ describe('manual entry', () => {
     expect(screen.getByLabelText('Company').props.value).toBe('Apex');
     expect(screen.getByRole('button', { name: 'Vitamins' })).toBeSelected();
     expect(screen.getByRole('button', { name: 'Strip' })).toBeSelected();
+  });
+
+  it('a double tap on Save & next writes once', async () => {
+    const s = await seed();
+    const med = s.meds.find((m) => m.name === 'Azithral 500')!;
+    const spy = jest
+      .spyOn(s.repos.inventory, 'saveIntake')
+      .mockImplementation(() => new Promise<void>((r) => setTimeout(r, 20)));
+    await renderRouter(routes(s.repos), { initialUrl: `/intake/manual?medicineId=${med.id}` });
+    await fireEvent.changeText(await screen.findByLabelText('Batch'), 'AZ90');
+    await fireEvent.changeText(screen.getByLabelText('Expiry'), '11/27');
+    await fireEvent.changeText(screen.getByLabelText('Quantity'), '2');
+    const b = screen.getByRole('button', { name: 'Save & next' });
+    await doubleTap(b);
+    expect(await screen.findByText('Saved Azithral 500')).toBeOnTheScreen();
+    expect(spy).toHaveBeenCalledTimes(1);
   });
 });
