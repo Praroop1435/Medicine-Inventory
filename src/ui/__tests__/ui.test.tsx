@@ -1,12 +1,17 @@
 import { fireEvent, render, screen } from '@testing-library/react-native';
 import { StyleSheet, Text } from 'react-native';
 import {
+  ActionTile,
   Button,
   ButtonRow,
+  Chip,
   ConfirmDialog,
   CountStrip,
+  EmptyState,
   Field,
   IconButton,
+  ListRow,
+  SectionHeader,
   StatusPill,
   Stepper,
 } from '@/ui';
@@ -18,19 +23,19 @@ describe('StatusPill', () => {
   it('expired uses red pill colours', async () => {
     await render(<StatusPill status="expired" label="Expired" />);
     const text = screen.getByText('Expired');
-    expect(flat(text).color).toBe('#831c1e');
-    expect(flat(screen.getByTestId('status-pill')).backgroundColor).toBe('#ffedea');
+    expect(flat(text).color).toBe('#8A1C1C');
+    expect(flat(screen.getByTestId('status-pill')).backgroundColor).toBe('#FDECEC');
   });
   it('soon has amber bg and border', async () => {
     await render(<StatusPill status="soon" label="Soon" />);
     const s = flat(screen.getByTestId('status-pill'));
-    expect(s.backgroundColor).toBe('#fffbeb');
-    expect(s.borderColor).toBe('#fde68a');
+    expect(s.backgroundColor).toBe('#FFF4E5');
+    expect(s.borderColor).toBe('#FCD9A8');
   });
   it('ok has no background and muted colour', async () => {
     await render(<StatusPill status="ok" label="OK" />);
     expect(flat(screen.getByTestId('status-pill')).backgroundColor).toBeUndefined();
-    expect(flat(screen.getByText('OK')).color).toBe('#6b6b6b');
+    expect(flat(screen.getByText('OK')).color).toBe('#5B6576');
   });
 });
 
@@ -79,7 +84,7 @@ describe('Field', () => {
       />,
     );
     expect(screen.getByText('Check this')).toBeTruthy();
-    expect(flat(screen.getByTestId('field-box')).borderColor).toBe('#d97706');
+    expect(flat(screen.getByTestId('field-box')).borderColor).toBe('#D97706');
   });
 });
 
@@ -96,9 +101,105 @@ describe('CountStrip', () => {
         onPress={onPress}
       />,
     );
-    expect(flat(screen.getByText('3')).color).toBe('#c4242a');
+    expect(flat(screen.getByText('3')).color).toBe('#C4242A');
     await fireEvent.press(screen.getByText('Soon'));
     expect(onPress).toHaveBeenCalledWith(1);
+  });
+  it('zero is never a warning: 0 renders muted whatever its tone', async () => {
+    await render(
+      <CountStrip
+        large
+        items={[
+          { label: 'Expired', value: 0, tone: 'expired' },
+          { label: 'Soon', value: 0, tone: 'soon' },
+          { label: 'Later', value: 2, tone: 'soon' },
+        ]}
+      />,
+    );
+    expect(screen.getAllByText('0').map((t) => flat(t).color)).toEqual(['#5B6576', '#5B6576']);
+    expect(flat(screen.getByText('2')).color).toBe('#B45309');
+    expect(flat(screen.getByText('2')).fontSize).toBe(32);
+  });
+});
+
+describe('Button variants', () => {
+  it('primary is navy, secondary white with a border, text teal with no fill', async () => {
+    await render(
+      <>
+        <Button label="P" onPress={() => {}} />
+        <Button label="S" variant="secondary" onPress={() => {}} />
+        <Button label="L" variant="text" onPress={() => {}} />
+      </>,
+    );
+    expect(flat(screen.getByRole('button', { name: 'P' })).backgroundColor).toBe('#26344E');
+    const sec = flat(screen.getByRole('button', { name: 'S' }));
+    expect([sec.backgroundColor, sec.borderWidth]).toEqual(['#FFFFFF', 1]);
+    expect(flat(screen.getByRole('button', { name: 'L' })).backgroundColor).toBeUndefined();
+    expect(flat(screen.getByText('L')).color).toBe('#0B7280');
+  });
+});
+
+describe('SectionHeader', () => {
+  it('is sentence case in the text colour, with a teal action', async () => {
+    const onRightPress = jest.fn();
+    await render(<SectionHeader title="Categories" right="See all" onRightPress={onRightPress} />);
+    const h = screen.getByRole('header', { name: 'Categories' });
+    expect([flat(h).fontSize, flat(h).color]).toEqual([14, '#101828']);
+    expect(flat(screen.getByText('See all')).color).toBe('#0B7280');
+    await fireEvent.press(screen.getByRole('button', { name: 'See all' }));
+    expect(onRightPress).toHaveBeenCalled();
+  });
+});
+
+describe('Chip', () => {
+  it('selected is teal on soft teal', async () => {
+    await render(<Chip label="All" selected />);
+    const c = flat(screen.getByRole('button', { name: 'All' }));
+    expect([c.backgroundColor, c.borderColor]).toEqual(['#E6F6F8', '#2BB3C0']);
+  });
+});
+
+describe('ListRow', () => {
+  it('shows a leading icon tile and can override what a screen reader says', async () => {
+    await render(
+      <ListRow
+        icon="folder"
+        title="Balms"
+        accessibilityLabel="Balms, Never checked"
+        onPress={() => {}}
+      />,
+    );
+    expect(screen.getByTestId('icon-tile')).toBeOnTheScreen();
+    expect(screen.getByRole('button', { name: 'Balms, Never checked' })).toBeOnTheScreen();
+  });
+});
+
+describe('EmptyState', () => {
+  it('has an icon, a title, a line and its action', async () => {
+    const onPress = jest.fn();
+    await render(
+      <EmptyState icon="folder" title="Nothing here yet" body="Add some stock.">
+        <Button label="Add stock" onPress={onPress} />
+      </EmptyState>,
+    );
+    expect(screen.getByTestId('icon-tile')).toBeOnTheScreen();
+    expect(screen.getByText('Add some stock.')).toBeOnTheScreen();
+    await fireEvent.press(screen.getByRole('button', { name: 'Add stock' }));
+    expect(onPress).toHaveBeenCalled();
+  });
+});
+
+describe('ActionTile', () => {
+  it('is a button named by its label, with the subtitle as a hint, at least 96 tall', async () => {
+    const onPress = jest.fn();
+    await render(
+      <ActionTile icon="scan" label="Scan bill" subtitle="Photo or PDF" onPress={onPress} />,
+    );
+    const b = screen.getByRole('button', { name: 'Scan bill' });
+    expect(b.props.accessibilityHint).toBe('Photo or PDF');
+    expect(flat(b).minHeight).toBeGreaterThanOrEqual(96);
+    await fireEvent.press(b);
+    expect(onPress).toHaveBeenCalled();
   });
 });
 
@@ -143,7 +244,7 @@ describe('ConfirmDialog', () => {
   it('confirm only confirms, with a red destructive button', async () => {
     const { onConfirm, onCancel } = await show();
     const del = screen.getByRole('button', { name: 'Delete' });
-    expect(flat(del).backgroundColor).toBe('#c4242a');
+    expect(flat(del).backgroundColor).toBe('#C4242A');
     await fireEvent.press(del);
     expect(onConfirm).toHaveBeenCalledTimes(1);
     expect(onCancel).not.toHaveBeenCalled();

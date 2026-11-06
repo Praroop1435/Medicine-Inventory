@@ -4,7 +4,8 @@ import { tokens } from './tokens';
 
 type Props = {
   label: string;
-  variant?: 'primary' | 'secondary' | 'danger';
+  /** primary = navy fill; secondary = white with a border; text = teal words only (links). */
+  variant?: 'primary' | 'secondary' | 'danger' | 'text';
   onPress: () => void;
   onPressIn?: () => void;
   onPressOut?: () => void;
@@ -21,7 +22,7 @@ export function Button({
   disabled,
   full,
 }: Props) {
-  const primary = variant !== 'secondary';
+  const filled = variant === 'primary' || variant === 'danger';
   return (
     <Pressable
       accessibilityRole="button"
@@ -41,18 +42,26 @@ export function Button({
         backgroundColor:
           variant === 'danger'
             ? tokens.color.expired
-            : primary
+            : variant === 'primary'
               ? tokens.color.primary
-              : tokens.color.surface,
-        borderWidth: primary ? 0 : 1,
+              : variant === 'secondary'
+                ? tokens.color.surface
+                : undefined,
+        borderWidth: variant === 'secondary' ? 1 : 0,
         borderColor: tokens.color.control,
-        opacity: disabled ? 0.4 : pressed ? 0.7 : 1,
+        opacity: disabled ? tokens.opacity.disabled : pressed ? tokens.opacity.pressed : 1,
       })}
     >
       <T
         size={14}
-        weight="medium"
-        color={primary ? tokens.color.onPrimary : tokens.color.text}
+        weight={variant === 'text' ? 'semibold' : 'medium'}
+        color={
+          filled
+            ? tokens.color.onPrimary
+            : variant === 'text'
+              ? tokens.color.tealInk
+              : tokens.color.text
+        }
         numberOfLines={1}
       >
         {label}

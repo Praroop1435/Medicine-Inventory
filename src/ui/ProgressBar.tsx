@@ -15,7 +15,7 @@ export function ProgressBar({ value }: { value: number }) {
         overflow: 'hidden',
       }}
     >
-      <View style={{ width: `${pct}%`, height: 4, backgroundColor: tokens.color.primary }} />
+      <View style={{ width: `${pct}%`, height: 4, backgroundColor: tokens.color.teal }} />
     </View>
   );
 }

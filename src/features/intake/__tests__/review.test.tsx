@@ -7,7 +7,7 @@ import { applyMatch, emptyDraft, type DraftBatch } from '@/domain/draft';
 import type { Batch, Category, Company, Medicine } from '@/domain/types';
 import { AppShell } from '@/features/shared/AppShell';
 import { ToastProvider } from '@/features/shared/Toast';
-import { Button, T } from '@/ui';
+import { Button, T, tokens } from '@/ui';
 import { useIntake, useSaveDrafts, type BillHeader } from '../IntakeContext';
 import ManualRoute from '../../../../app/intake/manual';
 import ReviewRoute from '../../../../app/intake/review';
@@ -135,8 +135,15 @@ function sixDrafts(s: Awaited<ReturnType<typeof seed>>) {
 async function openReview(drafts: DraftBatch[], bill?: BillHeader) {
   pending = { drafts, bill };
   await fireEvent.press(await screen.findByRole('button', { name: 'Open review' }));
-  await screen.findByRole('header', { name: 'Check bill' });
+  await screen.findByRole('header', { name: TITLES[drafts[0].source] });
 }
+
+const TITLES = {
+  scan: 'Check bill',
+  voice: 'Check what you said',
+  manual: 'Add stock',
+  bulk: 'Check import',
+} as const;
 
 async function start() {
   const s = await seed();
@@ -185,13 +192,19 @@ describe('review screen', () => {
     expect(saveButton()).toBeEnabled();
   });
 
+  it.each(Object.entries(TITLES))('titles a %s review "%s"', async (source, title) => {
+    const s = await start();
+    await openReview([{ ...sixDrafts(s)[2], source: source as DraftBatch['source'] }]);
+    expect(screen.getByRole('header', { name: title })).toBeOnTheScreen();
+  });
+
   it('marks unsure fields amber with what to check', async () => {
     const s = await start();
     await openReview(sixDrafts(s));
     expect(screen.getByText('Check expiry')).toBeOnTheScreen();
     expect(screen.getByText('Check quantity')).toBeOnTheScreen();
     const boxes = within(cards()[0]).getAllByTestId('field-box');
-    const amber = boxes.filter((b) => b.props.style.borderColor === '#d97706');
+    const amber = boxes.filter((b) => b.props.style.borderColor === tokens.color.amber);
     expect(amber).toHaveLength(1);
   });
 

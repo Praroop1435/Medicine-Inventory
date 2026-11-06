@@ -60,7 +60,7 @@ describe('settings', () => {
     await open();
     const headers = screen.getAllByRole('header').map((h) => h.props.children);
     expect(headers).toEqual(
-      expect.arrayContaining(['REMINDERS', 'PHONES', "THIS PHONE'S NAME", 'APP']),
+      expect.arrayContaining(['Reminders', 'Phones', "This phone's name", 'App']),
     );
     expect(screen.queryByText(/categor|compan/i)).toBeNull();
   });

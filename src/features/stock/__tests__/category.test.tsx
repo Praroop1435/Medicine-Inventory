@@ -167,8 +167,8 @@ describe('category screen', () => {
 
   it('splits needs action (by expiry) from all good, with subtitles and pills', async () => {
     await open();
-    await screen.findByRole('header', { name: 'NEEDS ACTION' });
-    expect(screen.getByRole('header', { name: 'ALL GOOD' })).toBeOnTheScreen();
+    await screen.findByRole('header', { name: 'Needs action' });
+    expect(screen.getByRole('header', { name: 'All good' })).toBeOnTheScreen();
     const names = screen
       .getAllByRole('button', { name: /^(Amoxil|Azithral|Zox|Althrocin|Zerodol),/ })
       .map((n) => n.props.accessibilityLabel);
@@ -197,12 +197,28 @@ describe('category screen', () => {
     await fireEvent.press(await screen.findByRole('button', { name: 'Cipla' }));
     expect(screen.queryByRole('button', { name: /^Azithral,/ })).toBeNull();
     expect(screen.getByRole('button', { name: /^Amoxil,/ })).toBeOnTheScreen();
-    expect(screen.queryByRole('header', { name: 'ALL GOOD' })).toBeNull();
+    expect(screen.queryByRole('header', { name: 'All good' })).toBeNull();
     const push = jest.spyOn(router, 'push').mockImplementation(() => {});
     await fireEvent.press(screen.getByRole('button', { name: /^Amoxil,/ }));
     expect(push).toHaveBeenCalledWith(expect.stringMatching(/^\/medicine\/.+/));
     await fireEvent.press(screen.getByRole('button', { name: 'All companies' }));
     expect(screen.getByRole('button', { name: /^Azithral,/ })).toBeOnTheScreen();
+  });
+});
+
+describe('empty folder', () => {
+  it('says what to do and offers Add stock (into this folder) and New folder; no company chips', async () => {
+    const { repos, shopId } = await seed();
+    const lotions = (await cats(repos, shopId)).find((c) => c.name === 'Lotions')!;
+    await renderRouter(routes(repos), { initialUrl: `/category/${lotions.id}` });
+    expect(await screen.findByText('Nothing in Lotions yet')).toBeOnTheScreen();
+    expect(screen.queryByRole('button', { name: 'All companies' })).toBeNull();
+    const push = jest.spyOn(router, 'push').mockImplementation(() => {});
+    await fireEvent.press(screen.getByRole('button', { name: 'Add stock' }));
+    expect(push).toHaveBeenCalledWith(`/intake/manual?categoryId=${lotions.id}`);
+    await fireEvent.press(screen.getByRole('button', { name: 'New folder' }));
+    expect(screen.getByLabelText('Folder name')).toBeOnTheScreen();
+    expect(screen.queryByText('Nothing in Lotions yet')).toBeNull();
   });
 });
 

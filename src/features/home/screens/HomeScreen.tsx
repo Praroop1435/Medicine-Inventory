@@ -1,23 +1,27 @@
 import { useState } from 'react';
 import { router } from 'expo-router';
+import { View } from 'react-native';
 import { alertCounts } from '@/domain/alerts';
 import { useInventory } from '@/features/shared/hooks/useInventory';
 import { useShop } from '@/features/shared/hooks/useShop';
 import { useToday } from '@/features/shared/hooks/useToday';
 import { searchInventory } from '@/domain/search';
-import { childrenOf } from '@/domain/tree';
 import {
   Card,
   CountStrip,
   EmptyState,
   ListRow,
+  Logo,
   Screen,
   SearchField,
   SectionHeader,
   Skeleton,
+  T,
+  tokens,
 } from '@/ui';
 import { CategoryList } from '../components/CategoryList';
 import { CheckReminder } from '../components/CheckReminder';
+import { FirstStockCard } from '../components/FirstStockCard';
 import { useSyncText } from '../components/SyncLine';
 
 const DAYS = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
@@ -25,7 +29,7 @@ const MONTHS = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', '
 const STATUS = ['expired', 'soon', 'watch'] as const;
 
 export function HomeScreen() {
-  const { batches, categories, medicines, companies, loading } = useInventory();
+  const { batches, medicines, companies, loading } = useInventory();
   const shop = useShop();
   const today = useToday();
   const sync = useSyncText();
@@ -34,17 +38,43 @@ export function HomeScreen() {
   const searching = query.replace(/\s/g, '').length >= 2;
   const counts = shop && alertCounts(batches, today, shop.alertDays);
   const date = `${DAYS[today.getDay()]} ${today.getDate()} ${MONTHS[today.getMonth()]}`;
+  const firstRun = !loading && medicines.length === 0;
 
   return (
-    <Screen title={shop?.name ?? ''} meta={`${date} · ${sync}`}>
-      <SearchField
-        value={query}
-        onChangeText={setQuery}
-        placeholder="Search medicine, company or batch"
-      />
+    <Screen
+      band={
+        <View style={{ gap: tokens.space[2] }}>
+          <Logo size={tokens.logo.mark} variant="white" />
+          <View>
+            <T
+              size={24}
+              weight="semibold"
+              color={tokens.color.onPrimary}
+              accessibilityRole="header"
+              numberOfLines={1}
+            >
+              {shop?.name ?? ''}
+            </T>
+            <T size={12} color={tokens.color.onPrimaryMuted}>{`${date} · ${sync}`}</T>
+          </View>
+        </View>
+      }
+      bandEdge={
+        <SearchField
+          floating
+          value={query}
+          onChangeText={setQuery}
+          placeholder="Search medicine, company or batch"
+        />
+      }
+    >
       {searching ? (
         results.length === 0 ? (
-          <EmptyState title={`No medicine matches “${query.trim()}”`} />
+          <EmptyState
+            icon="no-results"
+            title={`No medicine matches “${query.trim()}”`}
+            body="Try the name on the strip, the company, or the batch number."
+          />
         ) : (
           <Card>
             {results.map((r) => (
@@ -66,6 +96,7 @@ export function HomeScreen() {
             <Skeleton />
           ) : (
             <CountStrip
+              large
               items={[
                 { label: 'Expired', value: counts.expired, tone: 'expired' },
                 { label: `In ${shop.alertDays.second} days`, value: counts.soon, tone: 'soon' },
@@ -74,14 +105,21 @@ export function HomeScreen() {
               onPress={(i) => router.push(`/alerts/${STATUS[i]}`)}
             />
           )}
-          <SectionHeader
-            title="Categories"
-            right={loading ? undefined : `All ${childrenOf(categories, null).length}`}
-            onRightPress={() => router.push('/stock')}
-          />
-          <CategoryList limit={5} />
-          <SectionHeader title="Stock check" />
-          <CheckReminder />
+          {firstRun ? (
+            <View style={{ paddingTop: tokens.space[4] }}>
+              <FirstStockCard />
+            </View>
+          ) : (
+            <>
+              <SectionHeader
+                title="Categories"
+                right={loading ? undefined : 'See all'}
+                onRightPress={() => router.push('/stock')}
+              />
+              <CategoryList limit={5} />
+              <CheckReminder />
+            </>
+          )}
         </>
       )}
     </Screen>

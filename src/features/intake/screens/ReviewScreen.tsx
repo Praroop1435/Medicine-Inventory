@@ -1,13 +1,19 @@
 import { router } from 'expo-router';
 import { useRef, useState } from 'react';
 import { View } from 'react-native';
-import { canSave, draftIssues } from '@/domain/draft';
+import { canSave, draftIssues, type DraftBatch } from '@/domain/draft';
 import { useToast } from '@/features/shared/Toast';
 import { Button, EmptyState, Screen, T, tokens } from '@/ui';
 import { ReviewCard } from '../components/ReviewCard';
 import { useIntake } from '../IntakeContext';
 
 const items = (n: number) => `${n} item${n === 1 ? '' : 's'}`;
+const TITLE: Record<DraftBatch['source'], string> = {
+  scan: 'Check bill',
+  voice: 'Check what you said',
+  manual: 'Add stock',
+  bulk: 'Check import',
+};
 
 /** Every intake path ends here: nothing saves until each amber field is confirmed or edited. */
 export function ReviewScreen() {
@@ -30,7 +36,7 @@ export function ReviewScreen() {
       toast(`Saved ${items(n)}`);
       router.back();
     } catch (e) {
-      toast(e instanceof Error ? e.message : 'Something went wrong');
+      toast(e instanceof Error ? e.message : "Couldn't save. Check the connection and try again.");
     } finally {
       inFlight.current = false;
       setSaving(false);
@@ -40,7 +46,7 @@ export function ReviewScreen() {
   return (
     <Screen
       back="Back"
-      title="Check bill"
+      title={TITLE[drafts[0]?.source ?? 'scan']}
       meta={bill ? `${bill.supplier} · Bill #${bill.billNo} · ${bill.billDate}` : undefined}
       footer={
         n ? (
@@ -73,7 +79,9 @@ export function ReviewScreen() {
           ))}
         </View>
       ) : (
-        <EmptyState title="Nothing to check" body="Scan a bill or type stock in." />
+        <EmptyState icon="clipboard" title="Nothing to check" body="Scan a bill or type stock in.">
+          <Button label="Type stock in" full onPress={() => router.replace('/intake/manual')} />
+        </EmptyState>
       )}
     </Screen>
   );

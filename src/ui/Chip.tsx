@@ -21,17 +21,17 @@ export function Chip({
         height: tokens.touch,
         justifyContent: 'center',
         paddingHorizontal: tokens.space[4],
-        borderRadius: tokens.radius.control,
+        borderRadius: tokens.radius.pill,
         borderWidth: 1,
-        borderColor: selected ? tokens.color.primary : tokens.color.control,
-        backgroundColor: selected ? tokens.color.primary : tokens.color.surface,
+        borderColor: selected ? tokens.color.teal : tokens.color.control,
+        backgroundColor: selected ? tokens.color.tealSoft : tokens.color.surface,
         opacity: pressed ? 0.7 : 1,
       })}
     >
       <T
         size={14}
         weight="medium"
-        color={selected ? tokens.color.onPrimary : tokens.color.text}
+        color={selected ? tokens.color.tealInk : tokens.color.text}
         numberOfLines={1}
       >
         {label}

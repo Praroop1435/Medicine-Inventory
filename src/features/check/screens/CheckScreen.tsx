@@ -69,7 +69,11 @@ export function CheckScreen() {
   if (!category)
     return (
       <Screen back="Check">
-        <EmptyState title="Category not found" />
+        <EmptyState
+          icon="folder"
+          title="Folder not found"
+          body="It may have been deleted on another phone."
+        />
       </Screen>
     );
 
@@ -102,7 +106,10 @@ export function CheckScreen() {
   const mark = (b: Batch) =>
     check.markChecked(shopId, category.id, b.id, edits[b.id] ?? b.qty, deviceId).then(
       () => setEdits((e) => Object.fromEntries(Object.entries(e).filter(([k]) => k !== b.id))),
-      (e: unknown) => toast(e instanceof Error ? e.message : 'Something went wrong'),
+      (e: unknown) =>
+        toast(
+          e instanceof Error ? e.message : "Couldn't save. Check the connection and try again.",
+        ),
     );
 
   const finish = async () => {
@@ -117,7 +124,7 @@ export function CheckScreen() {
       toast(complete ? `${category.name} checked` : `Saved progress · ${done} of ${total} checked`);
       router.back();
     } catch (e) {
-      toast(e instanceof Error ? e.message : 'Something went wrong');
+      toast(e instanceof Error ? e.message : "Couldn't finish the check. Try again.");
     } finally {
       finishing.current = false;
     }
@@ -166,7 +173,13 @@ export function CheckScreen() {
         />
       )}
       <ProgressBar value={total ? done / total : 0} />
-      {total === 0 ? <EmptyState title="No stock in this category" /> : null}
+      {total === 0 ? (
+        <EmptyState
+          icon="clipboard"
+          title="Nothing to count here"
+          body="Add a batch to this folder, then check it against the shelf."
+        />
+      ) : null}
       {groups.map((g) => (
         <View key={g}>
           <SectionHeader title={g} />

@@ -1,8 +1,8 @@
-import { router } from 'expo-router';
 import type { BottomTabBarProps } from 'expo-router/js-tabs';
 import { useState } from 'react';
-import { Modal, Pressable, View } from 'react-native';
-import { Icon, ListRow, T, tokens, type IconName } from '@/ui';
+import { Pressable, View } from 'react-native';
+import { Icon, T, tokens, type IconName } from '@/ui';
+import { AddSheet } from './AddSheet';
 
 const TABS: { name: string; label: string; icon: IconName }[] = [
   { name: 'index', label: 'Home', icon: 'home' },
@@ -10,45 +10,6 @@ const TABS: { name: string; label: string; icon: IconName }[] = [
   { name: 'check', label: 'Check', icon: 'check' },
   { name: 'settings', label: 'Settings', icon: 'sliders' },
 ];
-
-const ADD_ROWS: { label: string; icon: IconName; href: string }[] = [
-  { label: 'Scan bill', icon: 'scan', href: '/intake/scan' },
-  { label: 'Speak', icon: 'mic', href: '/intake/voice' },
-  { label: 'Type', icon: 'keyboard', href: '/intake/manual' },
-  { label: 'Bulk import', icon: 'file', href: '/intake/bulk' },
-];
-
-function AddSheet({ visible, onClose }: { visible: boolean; onClose: () => void }) {
-  return (
-    <Modal visible={visible} transparent animationType="slide" onRequestClose={onClose}>
-      <Pressable
-        accessibilityLabel="Close"
-        onPress={onClose}
-        style={{ flex: 1, backgroundColor: tokens.color.scrim }}
-      />
-      <View
-        style={{
-          backgroundColor: tokens.color.surface,
-          borderTopLeftRadius: tokens.radius.card,
-          borderTopRightRadius: tokens.radius.card,
-          paddingBottom: tokens.space[6],
-        }}
-      >
-        {ADD_ROWS.map((r) => (
-          <ListRow
-            key={r.href}
-            title={r.label}
-            right={<Icon name={r.icon} />}
-            onPress={() => {
-              onClose();
-              router.push(r.href);
-            }}
-          />
-        ))}
-      </View>
-    </Modal>
-  );
-}
 
 function Tab({
   label,
@@ -61,19 +22,38 @@ function Tab({
   active: boolean;
   onPress: () => void;
 }) {
-  const color = active ? tokens.color.text : tokens.color.muted;
+  const color = active ? tokens.color.navy : tokens.color.muted;
   return (
     <Pressable
       accessibilityRole="tab"
       accessibilityLabel={label}
       accessibilityState={{ selected: active }}
       onPress={onPress}
-      style={{ flex: 1, minHeight: tokens.touch, alignItems: 'center', justifyContent: 'center' }}
+      style={{ flex: 1, alignSelf: 'stretch', alignItems: 'center' }}
     >
-      <Icon name={icon} color={color} />
-      <T size={12} color={color} numberOfLines={1}>
-        {label}
-      </T>
+      <View
+        testID={active ? 'tab-indicator' : undefined}
+        style={{
+          width: tokens.touch,
+          height: tokens.indicator,
+          borderBottomLeftRadius: tokens.indicator,
+          borderBottomRightRadius: tokens.indicator,
+          backgroundColor: active ? tokens.color.teal : undefined,
+        }}
+      />
+      <View
+        style={{
+          flex: 1,
+          minHeight: tokens.touch,
+          alignItems: 'center',
+          justifyContent: 'center',
+        }}
+      >
+        <Icon name={icon} color={color} />
+        <T size={12} weight={active ? 'semibold' : 'regular'} color={color} numberOfLines={1}>
+          {label}
+        </T>
+      </View>
     </Pressable>
   );
 }
@@ -99,34 +79,37 @@ export function TabBar({ state, navigateToTab, insets }: BottomTabBarProps) {
     <View
       style={{
         flexDirection: 'row',
-        alignItems: 'center',
         backgroundColor: tokens.color.surface,
         borderTopWidth: 1,
         borderTopColor: tokens.color.border,
-        paddingTop: tokens.space[1],
         paddingBottom: insets.bottom + tokens.space[1],
       }}
     >
       {TABS.slice(0, 2).map(tab)}
-      <View style={{ flex: 1, alignItems: 'center' }}>
-        <Pressable
-          accessibilityRole="button"
-          accessibilityLabel="Add"
-          onPress={() => setAdding(true)}
+      <Pressable
+        accessibilityRole="button"
+        accessibilityLabel="Add"
+        onPress={() => setAdding(true)}
+        style={{ flex: 1, alignItems: 'center', paddingTop: tokens.space[1] }}
+      >
+        <View
           style={{
             width: tokens.fab,
             height: tokens.fab,
             borderRadius: tokens.fab / 2,
             alignItems: 'center',
             justifyContent: 'center',
-            backgroundColor: tokens.color.primary,
+            backgroundColor: tokens.color.navy,
           }}
         >
-          <Icon name="plus" color={tokens.color.onPrimary} />
-        </Pressable>
-      </View>
+          <Icon name="plus" size={tokens.fab / 2} color={tokens.color.onPrimary} />
+        </View>
+        <T size={12} weight="semibold" color={tokens.color.navy}>
+          Add
+        </T>
+      </Pressable>
       {TABS.slice(2).map(tab)}
-      <AddSheet visible={adding} onClose={() => setAdding(false)} />
+      {adding && <AddSheet onClose={() => setAdding(false)} />}
     </View>
   );
 }

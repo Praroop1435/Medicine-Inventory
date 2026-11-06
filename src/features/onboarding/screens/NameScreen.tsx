@@ -42,11 +42,15 @@ export function NameScreen() {
     <Screen
       back="Back"
       title="Your name"
-      meta="Shown in the shop history next to your changes"
       footer={<Button label="Join" full disabled={busy || !displayName.trim()} onPress={join} />}
     >
       <View style={{ gap: tokens.space[4] }}>
-        <Field label="Your name" value={displayName} onChangeText={setDisplayName} />
+        <Field
+          label="Your name"
+          value={displayName}
+          onChangeText={setDisplayName}
+          hint="Shown next to your changes"
+        />
         {error ? <ErrorState message={error} /> : null}
       </View>
     </Screen>

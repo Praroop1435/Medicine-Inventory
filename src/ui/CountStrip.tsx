@@ -9,14 +9,18 @@ const toneColor: Record<Tone, string> = {
   ink: tokens.color.text,
 };
 
+/** A row of counts. Zero is never a warning: a 0 shows muted whatever its tone. */
 export function CountStrip({
   items,
   selectedIndex,
   onPress,
+  large,
 }: {
   items: Item[];
   selectedIndex?: number;
   onPress?: (i: number) => void;
+  /** 32pt numbers; Home only. */
+  large?: boolean;
 }) {
   return (
     <View
@@ -47,7 +51,12 @@ export function CountStrip({
             opacity: pressed ? 0.7 : 1,
           })}
         >
-          <T size={20} weight="semibold" color={toneColor[it.tone ?? 'ink']} numberOfLines={1}>
+          <T
+            size={large ? 32 : 20}
+            weight="semibold"
+            color={it.value === 0 ? tokens.color.muted : toneColor[it.tone ?? 'ink']}
+            numberOfLines={1}
+          >
             {String(it.value)}
           </T>
           <T size={12} color={tokens.color.muted} numberOfLines={1}>

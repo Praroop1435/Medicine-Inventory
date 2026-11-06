@@ -55,7 +55,11 @@ export function FolderScreen({ id }: { id: string | null }) {
   if (id !== null && !category)
     return (
       <Screen back={back}>
-        <EmptyState title="Category not found" />
+        <EmptyState
+          icon="folder"
+          title="Folder not found"
+          body="It may have been deleted on another phone."
+        />
       </Screen>
     );
 
@@ -164,8 +168,24 @@ export function FolderScreen({ id }: { id: string | null }) {
           <Card>{good.map(row)}</Card>
         </>
       )}
-      {shown.length === 0 && folders.length === 0 && <EmptyState title="No medicines yet" />}
-      {newFolder}
+      {all.length === 0 && folders.length === 0 && !adding ? (
+        <EmptyState
+          icon="folder"
+          title={`Nothing in ${category.name} yet`}
+          body="Add the medicines on this shelf, or split it into smaller folders."
+        >
+          <View style={{ gap: tokens.space[3] }}>
+            <Button
+              label="Add stock"
+              full
+              onPress={() => router.push(`/intake/manual?categoryId=${category.id}`)}
+            />
+            <Button label="New folder" variant="secondary" full onPress={() => setAdding(true)} />
+          </View>
+        </EmptyState>
+      ) : (
+        newFolder
+      )}
     </Screen>
   );
 }

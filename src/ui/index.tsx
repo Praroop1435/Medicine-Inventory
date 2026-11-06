@@ -23,5 +23,8 @@ export { ErrorState } from './ErrorState';
 export { Skeleton } from './Skeleton';
 export { IconButton } from './IconButton';
 export { Icon } from './Icon';
+export { IconTile } from './IconTile';
+export { ActionTile } from './ActionTile';
+export { Logo } from './Logo';
 export type { IconName } from './Icon';
 export { T } from './Text';

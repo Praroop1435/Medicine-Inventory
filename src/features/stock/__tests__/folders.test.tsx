@@ -124,7 +124,7 @@ describe('folders', () => {
     const row = await screen.findByRole('button', { name: 'Cough syrups, 4 medicines · 8 units' });
     expect(within(row).getByText('1 expired')).toBeOnTheScreen();
     expect(screen.queryByRole('button', { name: /^Dry,/ })).toBeNull();
-    expect(screen.getByRole('button', { name: 'All 9' })).toBeOnTheScreen();
+    expect(screen.getByRole('button', { name: 'See all' })).toBeOnTheScreen();
   });
 
   it('a folder shows its path, rolled-up meta, sub-folders first, then its own medicines', async () => {

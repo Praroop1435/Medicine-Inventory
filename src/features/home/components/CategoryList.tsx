@@ -56,6 +56,7 @@ export function CategoryList({
         return (
           <ListRow
             key={c.id}
+            icon="folder"
             title={c.name}
             subtitle={`${medicineCount(s.medicineCount)} · ${s.unitCount} units`}
             right={

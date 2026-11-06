@@ -9,6 +9,8 @@ type Props = {
   uncertain?: boolean;
   uncertainLabel?: string;
   keyboardType?: KeyboardTypeOptions;
+  /** A muted line under the box, e.g. an example value. */
+  hint?: string;
 };
 
 export function Field({
@@ -18,6 +20,7 @@ export function Field({
   uncertain,
   uncertainLabel,
   keyboardType,
+  hint,
 }: Props) {
   return (
     <View style={{ gap: tokens.space[1] }}>
@@ -52,6 +55,10 @@ export function Field({
       {uncertain && uncertainLabel ? (
         <T size={12} color={tokens.color.soon}>
           {uncertainLabel}
+        </T>
+      ) : hint ? (
+        <T size={12} color={tokens.color.muted}>
+          {hint}
         </T>
       ) : null}
     </View>

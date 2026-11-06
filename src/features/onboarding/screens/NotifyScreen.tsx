@@ -14,7 +14,7 @@ export function NotifyScreen() {
     resetTo('/');
   };
   return (
-    <Screen title="Stay on top of expiry">
+    <Screen title="Get expiry reminders">
       <T size={16}>
         Get a morning alert when medicines are expiring, and a night reminder to update stock.
       </T>

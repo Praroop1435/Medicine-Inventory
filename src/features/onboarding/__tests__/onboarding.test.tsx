@@ -1,5 +1,5 @@
 import { router } from 'expo-router';
-import { fireEvent, renderRouter, screen } from 'expo-router/testing-library';
+import { fireEvent, renderRouter, screen, within } from 'expo-router/testing-library';
 import type { Device } from '@/domain/types';
 import { createMemoryRepos } from '@/data/memory/createMemoryRepos';
 import type { Repos } from '@/data/repositories';
@@ -64,7 +64,10 @@ describe('onboarding', () => {
     const notifier = askNotifier();
     const r = await renderRouter(routes(repos, '', notifier), { initialUrl: '/' });
 
+    expect(await screen.findByRole('header', { name: 'Med Stock' })).toBeOnTheScreen();
+    expect(screen.getByText('Expiry alerts and stock for your medical shop.')).toBeOnTheScreen();
     await fireEvent.press(await screen.findByRole('button', { name: 'Set up shop' }));
+    expect(screen.getByText('e.g. Anand Medical')).toBeOnTheScreen();
     await fireEvent.changeText(screen.getByLabelText('Shop name'), 'Anand Medicals');
     await fireEvent.changeText(screen.getByLabelText('Your name'), 'Priya');
     await fireEvent.press(screen.getByRole('button', { name: 'Create shop' }));
@@ -148,15 +151,24 @@ describe('onboarding', () => {
     // The router binds its methods on render, so spy afterwards.
     const push = jest.spyOn(router, 'push').mockImplementation(() => {});
 
-    const rows = [
-      ['Scan bill', '/intake/scan'],
-      ['Speak', '/intake/voice'],
-      ['Type', '/intake/manual'],
-      ['Bulk import', '/intake/bulk'],
+    const tiles = [
+      ['Scan bill', 'Photo or PDF of a bill', '/intake/scan'],
+      ['Speak', 'Say name, batch, expiry', '/intake/voice'],
+      ['Type', 'One medicine at a time', '/intake/manual'],
+      ['Bulk import', 'From a spreadsheet', '/intake/bulk'],
     ];
-    for (const [label, href] of rows) {
-      await fireEvent.press(await screen.findByRole('button', { name: 'Add' }));
-      await fireEvent.press(await screen.findByRole('button', { name: label }));
+    await fireEvent.press(await screen.findByRole('button', { name: 'Add' }));
+    const sheet = within(await screen.findByTestId('sheet'));
+    expect(sheet.getByRole('header', { name: 'Add stock' })).toBeOnTheScreen();
+    expect(sheet.getAllByRole('button').map((b) => b.props.accessibilityLabel)).toEqual(
+      tiles.map((t) => t[0]),
+    );
+    for (const [, subtitle] of tiles) expect(sheet.getByText(subtitle)).toBeOnTheScreen();
+    for (const [label, , href] of tiles) {
+      if (!screen.queryByTestId('sheet'))
+        await fireEvent.press(screen.getByRole('button', { name: 'Add' }));
+      const open = within(await screen.findByTestId('sheet'));
+      await fireEvent.press(open.getByRole('button', { name: label }));
       expect(push).toHaveBeenLastCalledWith(href);
     }
   });

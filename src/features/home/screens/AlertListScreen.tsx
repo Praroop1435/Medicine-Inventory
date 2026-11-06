@@ -29,7 +29,15 @@ export function AlertListScreen() {
       {loading || !shop ? (
         <Skeleton />
       ) : rows.length === 0 ? (
-        <EmptyState title="Nothing here" />
+        <EmptyState
+          icon="calendar"
+          title={
+            s === 'expired'
+              ? 'Nothing expired'
+              : `Nothing expires in the next ${s === 'soon' ? shop.alertDays.second : shop.alertDays.first} days`
+          }
+          body="Medicines show here as their expiry gets close."
+        />
       ) : (
         <Card>
           {rows.map((b) => {

@@ -41,8 +41,18 @@ export function SetupScreen() {
       }
     >
       <View style={{ gap: tokens.space[4] }}>
-        <Field label="Shop name" value={shopName} onChangeText={setShopName} />
-        <Field label="Your name" value={displayName} onChangeText={setDisplayName} />
+        <Field
+          label="Shop name"
+          value={shopName}
+          onChangeText={setShopName}
+          hint="e.g. Anand Medical"
+        />
+        <Field
+          label="Your name"
+          value={displayName}
+          onChangeText={setDisplayName}
+          hint="Shown next to your changes"
+        />
         {error ? <ErrorState message={error} /> : null}
       </View>
     </Screen>

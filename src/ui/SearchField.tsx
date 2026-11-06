@@ -6,10 +6,13 @@ export function SearchField({
   value,
   onChangeText,
   placeholder,
+  floating,
 }: {
   value: string;
   onChangeText: (t: string) => void;
   placeholder?: string;
+  /** Lifted with a soft shadow, e.g. over the Home header band. */
+  floating?: boolean;
 }) {
   return (
     <View
@@ -21,8 +24,9 @@ export function SearchField({
         paddingHorizontal: tokens.space[3],
         backgroundColor: tokens.color.surface,
         borderColor: tokens.color.control,
-        borderWidth: 1,
+        borderWidth: floating ? 0 : 1,
         borderRadius: tokens.radius.control,
+        ...(floating ? tokens.shadow : null),
       }}
     >
       <Icon name="search" color={tokens.color.muted} />
@@ -46,7 +50,13 @@ export function SearchField({
           accessibilityRole="button"
           accessibilityLabel="Clear search"
           onPress={() => onChangeText('')}
-          hitSlop={tokens.space[2]}
+          style={{
+            width: tokens.touch,
+            height: tokens.touch,
+            marginRight: -tokens.space[3],
+            alignItems: 'center',
+            justifyContent: 'center',
+          }}
         >
           <Icon name="close" color={tokens.color.muted} />
         </Pressable>

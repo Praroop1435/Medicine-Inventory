@@ -1,11 +1,13 @@
 import { router } from 'expo-router';
 import { fireEvent, renderRouter, screen, within } from 'expo-router/testing-library';
+import { StyleSheet } from 'react-native';
 import { createMemoryRepos } from '@/data/memory/createMemoryRepos';
 import type { Repos } from '@/data/repositories';
 import { emptyDraft } from '@/domain/draft';
 import type { Category, Unit } from '@/domain/types';
 import { AppShell } from '@/features/shared/AppShell';
 import { ToastProvider } from '@/features/shared/Toast';
+import { tokens } from '@/ui';
 import { CategoryList } from '../components/CategoryList';
 import TabsLayout from '../../../../app/(tabs)/_layout';
 import Home from '../../../../app/(tabs)/index';
@@ -234,17 +236,41 @@ describe('home', () => {
     expect(screen.getByText('Never checked')).toBeOnTheScreen();
   });
 
-  it('an empty shop shows 0 / 0 / 0 and the seeded categories with 0 medicines', async () => {
+  it('first run: 0 / 0 / 0 in muted grey and an Add your first stock card instead of categories', async () => {
     const repos = createMemoryRepos();
     const { shopId, deviceId } = await repos.shop.createShop('Anand Medicals', 'Priya');
     mockStore.set('session', JSON.stringify({ shopId, deviceId, displayName: 'Priya' }));
     await open(repos);
-    expect(await screen.findByRole('button', { name: 'Expired 0' })).toBeOnTheScreen();
+    const zero = await screen.findByRole('button', { name: 'Expired 0' });
     expect(screen.getByRole('button', { name: 'In 30 days 0' })).toBeOnTheScreen();
     expect(screen.getByRole('button', { name: 'In 90 days 0' })).toBeOnTheScreen();
-    expect(
-      screen.getByRole('button', { name: 'Antibiotics, 0 medicines · 0 units' }),
-    ).toBeOnTheScreen();
+    // Zero is never a warning: muted, not the expired red.
+    expect(StyleSheet.flatten(within(zero).getByText('0').props.style).color).toBe(
+      tokens.color.muted,
+    );
+    expect(screen.getByRole('header', { name: 'Add your first stock' })).toBeOnTheScreen();
+    expect(screen.queryByRole('button', { name: /^Antibiotics,/ })).toBeNull();
+    expect(screen.queryByText('Stock check')).toBeNull();
+    const push = jest.spyOn(router, 'push').mockImplementation(() => {});
+    for (const [label, href] of [
+      ['Scan bill', '/intake/scan'],
+      ['Speak', '/intake/voice'],
+      ['Type', '/intake/manual'],
+      ['Bulk import from a spreadsheet', '/intake/bulk'],
+    ]) {
+      await fireEvent.press(screen.getByRole('button', { name: label }));
+      expect(push).toHaveBeenLastCalledWith(href);
+    }
+  });
+
+  it('with stock, a count above zero takes its status colour', async () => {
+    const { repos } = await seed();
+    await open(repos);
+    const expired = await screen.findByRole('button', { name: 'Expired 3' });
+    expect(StyleSheet.flatten(within(expired).getByText('3').props.style).color).toBe(
+      tokens.color.expired,
+    );
+    expect(screen.queryByText('Add your first stock')).toBeNull();
   });
 
   it('shows skeletons while the inventory is loading', async () => {
@@ -276,11 +302,11 @@ describe('home', () => {
     expect(await screen.findByRole('button', { name: 'Expired 3' })).toBeOnTheScreen();
   });
 
-  it('All N opens the Stock tab', async () => {
+  it('See all opens the Stock tab', async () => {
     const { repos } = await seed();
     await open(repos);
     const push = jest.spyOn(router, 'push').mockImplementation(() => {});
-    await fireEvent.press(await screen.findByRole('button', { name: 'All 9' }));
+    await fireEvent.press(await screen.findByRole('button', { name: 'See all' }));
     expect(push).toHaveBeenCalledWith('/stock');
   });
 });

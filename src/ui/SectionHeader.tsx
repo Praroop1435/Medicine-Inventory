@@ -17,12 +17,12 @@ export function SectionHeader({
         flexDirection: 'row',
         justifyContent: 'space-between',
         alignItems: 'center',
-        paddingTop: tokens.space[5],
-        paddingBottom: tokens.space[2],
+        minHeight: tokens.touch,
+        paddingTop: tokens.space[2],
       }}
     >
-      <T size={12} weight="medium" color={tokens.color.muted} accessibilityRole="header">
-        {title.toUpperCase()}
+      <T size={14} weight="semibold" accessibilityRole="header">
+        {title}
       </T>
       {right ? (
         <Pressable
@@ -30,9 +30,17 @@ export function SectionHeader({
           accessibilityLabel={right}
           disabled={!onRightPress}
           onPress={onRightPress}
-          hitSlop={tokens.space[2]}
+          style={{
+            minHeight: tokens.touch,
+            justifyContent: 'center',
+            paddingLeft: tokens.space[3],
+          }}
         >
-          <T size={12} color={tokens.color.muted}>
+          <T
+            size={14}
+            weight="medium"
+            color={onRightPress ? tokens.color.tealInk : tokens.color.muted}
+          >
             {right}
           </T>
         </Pressable>

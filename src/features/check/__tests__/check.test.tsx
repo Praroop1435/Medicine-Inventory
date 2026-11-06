@@ -1,11 +1,13 @@
 import { router } from 'expo-router';
 import { act, fireEvent, renderRouter, screen, within } from 'expo-router/testing-library';
+import { StyleSheet } from 'react-native';
 import { createMemoryRepos } from '@/data/memory/createMemoryRepos';
 import type { CheckSession, Repos } from '@/data/repositories';
 import { emptyDraft } from '@/domain/draft';
 import type { Batch, Category, StockEvent } from '@/domain/types';
 import { AppShell } from '@/features/shared/AppShell';
 import { ToastProvider } from '@/features/shared/Toast';
+import { tokens } from '@/ui';
 import CheckTab from '../../../../app/(tabs)/check';
 import CheckRoute from '../../../../app/check/[categoryId]';
 
@@ -141,10 +143,10 @@ describe('check screen', () => {
   it('groups rows by company, alphabetically, and leaves other categories out', async () => {
     await open();
     const text = screen
-      .getAllByText(/^(ALEMBIC|CIPLA|MICRO LABS|Azithral 500|Amoxyclav 625|Ciplox 500|Dolo)$/)
+      .getAllByText(/^(Alembic|Cipla|Micro Labs|Azithral 500|Amoxyclav 625|Ciplox 500|Dolo)$/)
       .map((n) => n.props.children)
       .join('|');
-    expect(text).toBe('ALEMBIC|Azithral 500|Azithral 500|CIPLA|Amoxyclav 625|Ciplox 500');
+    expect(text).toBe('Alembic|Azithral 500|Azithral 500|Cipla|Amoxyclav 625|Ciplox 500');
     expect(within(row('AZ88')).getByText('AZ88 · exp Nov 2026')).toBeOnTheScreen();
     expect(within(row('AMX31')).getByText('expired Oct 2026')).toBeOnTheScreen();
   });
@@ -272,7 +274,7 @@ describe('nested folders', () => {
       .getAllByRole('header')
       .map((n) => n.props.children as string)
       .filter((t) => t !== 'Antibiotics');
-    expect(heads).toEqual(['ALEMBIC', 'CIPLA', 'KIDS · MANKIND']);
+    expect(heads).toEqual(['Alembic', 'Cipla', 'Kids · Mankind']);
     for (const no of ['AZ94', 'AMX31', 'CX210', 'MK1']) {
       await fireEvent.press(tick(no));
       await act(async () => {});
@@ -289,7 +291,7 @@ describe('nested folders', () => {
     const s = await withSubFolder();
     await renderRouter(routes(s.repos), { initialUrl: '/check' });
     expect(
-      await screen.findByRole('button', { name: 'Antibiotics, partly checked · 1 of 5' }),
+      await screen.findByRole('button', { name: 'Antibiotics, Partly checked · 1 of 5' }),
     ).toBeOnTheScreen();
     expect(screen.queryByRole('button', { name: /^Kids,/ })).toBeNull();
   });
@@ -325,20 +327,45 @@ describe('check tab', () => {
       (n) => n.props.accessibilityLabel as string,
     );
     expect(names.slice(0, 3)).toEqual([
-      'Antibiotics, partly checked · 1 of 4',
-      'Pain relief, checked 3 days ago',
-      'Cough syrups, checked 1 day ago',
+      'Antibiotics, Partly checked · 1 of 4',
+      'Pain relief, Checked 3 days ago',
+      'Cough syrups, Checked 1 day ago',
     ]);
-    expect(names).toContain('Balms, checked today');
+    expect(names).toContain('Balms, Checked today');
+    expect(screen.getByText("Count what's on the shelf. Oldest checks first.")).toBeOnTheScreen();
+    // Partly checked is teal (in progress), checked is muted: neither is an expiry colour.
+    const pill = within(screen.getByRole('button', { name: /^Antibiotics,/ })).getByText(
+      'Partly checked · 1 of 4',
+    );
+    expect(StyleSheet.flatten(pill.props.style).color).toBe(tokens.color.tealInk);
+    const quiet = within(screen.getByRole('button', { name: /^Pain relief,/ })).getByText(
+      'Checked 3 days ago',
+    );
+    expect(StyleSheet.flatten(quiet.props.style).color).toBe(tokens.color.muted);
 
     const push = jest.spyOn(router, 'push').mockImplementation(() => {});
     await fireEvent.press(screen.getByRole('button', { name: /^Pain relief/ }));
     expect(push).toHaveBeenCalledWith(`/check/${s.cat('Pain relief').id}`);
   });
 
-  it('says never checked', async () => {
+  it('says never checked, amber', async () => {
     const s = await seed();
     await renderRouter(routes(s.repos), { initialUrl: '/check' });
-    expect(await screen.findByRole('button', { name: 'Balms, never checked' })).toBeOnTheScreen();
+    const row = await screen.findByRole('button', { name: 'Balms, Never checked' });
+    expect(StyleSheet.flatten(within(row).getByText('Never checked').props.style).color).toBe(
+      tokens.color.soon,
+    );
+  });
+
+  it('with no live stock anywhere, says nothing to check yet and offers Add stock', async () => {
+    const repos = createMemoryRepos();
+    const { shopId, deviceId } = await repos.shop.createShop('Anand Medicals', 'Priya');
+    mockStore.set('session', JSON.stringify({ shopId, deviceId, displayName: 'Priya' }));
+    await renderRouter(routes(repos), { initialUrl: '/check' });
+    expect(await screen.findByText('Nothing to check yet')).toBeOnTheScreen();
+    expect(screen.queryByRole('button', { name: /^Balms,/ })).toBeNull();
+    await fireEvent.press(screen.getByRole('button', { name: 'Add stock' }));
+    const sheet = within(await screen.findByTestId('sheet'));
+    expect(sheet.getByRole('button', { name: 'Scan bill' })).toBeOnTheScreen();
   });
 });

@@ -1,7 +1,8 @@
-import { router } from 'expo-router';
-import type { ReactNode } from 'react';
+import { router, useFocusEffect } from 'expo-router';
+import { setStatusBarStyle } from 'expo-status-bar';
+import { useCallback, type ReactNode } from 'react';
 import { Pressable, ScrollView, View } from 'react-native';
-import { SafeAreaView } from 'react-native-safe-area-context';
+import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Icon } from './Icon';
 import { T } from './Text';
 import { tokens } from './tokens';
@@ -13,11 +14,48 @@ type Props = {
   onBack?: () => void;
   children: ReactNode;
   footer?: ReactNode;
+  /** Navy brand band at the top, drawn behind the status bar (Home, Welcome). */
+  band?: ReactNode;
+  /** Sits across the band's bottom edge, e.g. the Home search field. */
+  bandEdge?: ReactNode;
 };
 
-export function Screen({ title, meta, back, onBack, children, footer }: Props) {
+/** The navy band behind a light status bar; the bar goes back to dark when the screen loses focus. */
+function Band({ children, edge }: { children: ReactNode; edge?: ReactNode }) {
+  const insets = useSafeAreaInsets();
+  useFocusEffect(
+    useCallback(() => {
+      setStatusBarStyle('light');
+      return () => setStatusBarStyle('dark');
+    }, []),
+  );
   return (
-    <SafeAreaView style={{ flex: 1, backgroundColor: tokens.color.ground }}>
+    <>
+      <View
+        testID="screen-band"
+        style={{
+          backgroundColor: tokens.color.navy,
+          marginHorizontal: -tokens.margin,
+          paddingHorizontal: tokens.margin,
+          paddingTop: insets.top + tokens.space[4],
+          paddingBottom: edge ? tokens.touch / 2 + tokens.space[4] : tokens.space[6],
+        }}
+      >
+        {children}
+      </View>
+      {edge ? (
+        <View style={{ marginTop: -tokens.touch / 2, marginBottom: tokens.space[3] }}>{edge}</View>
+      ) : null}
+    </>
+  );
+}
+
+export function Screen({ title, meta, back, onBack, children, footer, band, bandEdge }: Props) {
+  return (
+    <SafeAreaView
+      edges={band ? ['left', 'right', 'bottom'] : undefined}
+      style={{ flex: 1, backgroundColor: tokens.color.ground }}
+    >
       {back ? (
         <Pressable
           accessibilityRole="button"
@@ -40,6 +78,7 @@ export function Screen({ title, meta, back, onBack, children, footer }: Props) {
         contentContainerStyle={{ paddingHorizontal: tokens.margin, paddingBottom: tokens.space[6] }}
         keyboardShouldPersistTaps="handled"
       >
+        {band ? <Band edge={bandEdge}>{band}</Band> : null}
         {title ? (
           <View style={{ paddingTop: tokens.space[2], paddingBottom: tokens.space[3] }}>
             <T size={24} weight="semibold" accessibilityRole="header">
