@@ -1,5 +1,5 @@
 import type { Category } from '@/domain/types';
-import { parseSheetRows } from '../sheetParser';
+import { DATE_CELL, parseSheetRows } from '../sheetParser';
 
 const cats: Category[] = [{ id: 'c1', name: 'Antibiotics', order: 0, lastCheckedAt: null }];
 const H = ['category', 'company', 'medicine', 'unit', 'batch', 'expiry', 'qty'];
@@ -68,5 +68,16 @@ describe('parseSheetRows', () => {
       cats,
     );
     expect(drafts[0].categoryId).toBeNull();
+  });
+
+  it('rejects a date-typed expiry cell', () => {
+    const { drafts, errors } = parseSheetRows(
+      [H, ['', 'A', 'M', 'box', 'B', DATE_CELL, '1']],
+      cats,
+    );
+    expect(drafts).toEqual([]);
+    expect(errors).toEqual([
+      { row: 2, message: 'Expiry is a date cell — type it as text, e.g. 11/26' },
+    ]);
   });
 });

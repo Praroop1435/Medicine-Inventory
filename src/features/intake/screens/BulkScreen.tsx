@@ -26,7 +26,9 @@ export function BulkScreen() {
     try {
       const res = await getDocumentAsync({ copyToCacheDirectory: true });
       if (res.canceled) return;
-      const parsed = parseSheetRows(await readSheetFile(res.assets[0].uri), categories);
+      const rows = await readSheetFile(res.assets[0].uri).catch(() => null);
+      if (!rows) return toast("Couldn't read this file. Save it as .xlsx or .csv and try again.");
+      const parsed = parseSheetRows(rows, categories);
       if (parsed.errors.length) setResult(parsed);
       else if (parsed.drafts.length) review(parsed.drafts);
       else toast('No rows found in that file');
@@ -58,7 +60,7 @@ export function BulkScreen() {
             </Card>
             {result.drafts.length ? (
               <Button
-                label={`Review ${result.drafts.length} good rows`}
+                label={`Review ${result.drafts.length} good row${result.drafts.length === 1 ? '' : 's'}`}
                 onPress={() => review(result.drafts)}
               />
             ) : null}

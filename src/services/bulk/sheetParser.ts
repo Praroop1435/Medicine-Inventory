@@ -13,6 +13,9 @@ export const TEMPLATE_HEADERS = [
   'qty',
 ] as const;
 
+/** readSheetFile puts this in place of a date-typed cell. */
+export const DATE_CELL = '\u0000DATE';
+
 export type SheetError = { row: number; message: string };
 
 const parseQty = (s: string): number | null => {
@@ -42,8 +45,14 @@ export function parseSheetRows(
   const drafts: DraftBatch[] = [];
   const errors: SheetError[] = [];
   rows.slice(1).forEach((r, i) => {
-    const cell = (h: string) => (r[head.indexOf(h)] ?? '').trim();
+    const raw = (h: string) => (r[head.indexOf(h)] ?? '').trim();
+    const cell = (h: string) => (raw(h) === DATE_CELL ? '' : raw(h));
     if (r.every((c) => !c.trim())) return;
+    if (raw('expiry') === DATE_CELL)
+      return void errors.push({
+        row: i + 2,
+        message: 'Expiry is a date cell — type it as text, e.g. 11/26',
+      });
     const row = i + 2;
     const fail = (message: string) => errors.push({ row, message });
     const unit = parseUnit(cell('unit'));
