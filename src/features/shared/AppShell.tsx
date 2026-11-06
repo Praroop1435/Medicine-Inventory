@@ -1,6 +1,7 @@
 import { Stack } from 'expo-router';
 import { RepoProvider } from '@/data/RepoContext';
 import type { Repos } from '@/data/repositories';
+import { IntakeProvider } from '@/features/intake/IntakeContext';
 import { SessionProvider } from '@/features/onboarding/SessionContext';
 import { InventoryProvider } from './hooks/useInventory';
 
@@ -10,7 +11,9 @@ export function AppShell({ repos }: { repos: Repos }) {
     <RepoProvider repos={repos}>
       <SessionProvider>
         <InventoryProvider>
-          <Stack screenOptions={{ headerShown: false }} />
+          <IntakeProvider>
+            <Stack screenOptions={{ headerShown: false }} />
+          </IntakeProvider>
         </InventoryProvider>
       </SessionProvider>
     </RepoProvider>
