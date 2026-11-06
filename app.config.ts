@@ -24,6 +24,8 @@ const expoConfig: ExpoConfig = {
     },
   },
   plugins: [
+    // Firebase Android SDK 25 ships Kotlin 2.4 metadata; Kotlin 2.3 can read it (RN 0.88 defaults to 2.2).
+    ['expo-build-properties', { android: { kotlinVersion: '2.3.21' } }],
     'expo-router',
     '@react-native-firebase/app',
     '@react-native-firebase/auth',
