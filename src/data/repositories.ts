@@ -30,7 +30,10 @@ export interface ShopRepo {
   rotateJoinSecret(shopId: string, byDeviceId: string): Promise<string>;
 }
 
+export type SyncState = { online: boolean; pending: number };
+
 export interface InventoryRepo {
+  watchSyncState(shopId: string, cb: (s: SyncState) => void): Unsub;
   watchCategories(shopId: string, cb: (c: Category[]) => void): Unsub;
   watchCompanies(shopId: string, cb: (c: Company[]) => void): Unsub;
   watchMedicines(shopId: string, cb: (m: Medicine[]) => void): Unsub;

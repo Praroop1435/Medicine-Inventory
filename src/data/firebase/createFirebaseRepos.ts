@@ -230,6 +230,19 @@ export function createFirebaseRepos(opts: { onWriteError?: (e: Error) => void } 
       },
     },
     inventory: {
+      // pending = live batch docs with unsynced local writes; online = the latest snapshot came from the server.
+      // shortcut: only batches are watched (stock changes are the writes that matter); other collections' pending writes aren't counted.
+      watchSyncState: (shopId, cb) =>
+        onSnapshot(
+          query(col(shopId, 'batches'), where('status', '==', 'active')),
+          { includeMetadataChanges: true },
+          (s) =>
+            cb({
+              online: !s.metadata.fromCache,
+              pending: s.docs.filter((d) => d.metadata.hasPendingWrites).length,
+            }),
+          onError,
+        ),
       watchCategories: (shopId, cb) =>
         list(query(col(shopId, 'categories'), orderBy('order')), withId<Category>, cb),
       watchCompanies: (shopId, cb) => list(col(shopId, 'companies'), withId<Company>, cb),

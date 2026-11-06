@@ -1,0 +1,259 @@
+import { router } from 'expo-router';
+import { fireEvent, renderRouter, screen, within } from 'expo-router/testing-library';
+import { createMemoryRepos } from '@/data/memory/createMemoryRepos';
+import type { Repos } from '@/data/repositories';
+import { emptyDraft } from '@/domain/draft';
+import type { Category, Unit } from '@/domain/types';
+import { AppShell } from '@/features/shared/AppShell';
+import { ToastProvider } from '@/features/shared/Toast';
+import { CategoryList } from '../components/CategoryList';
+import TabsLayout from '../../../../app/(tabs)/_layout';
+import Home from '../../../../app/(tabs)/index';
+import Alerts from '../../../../app/alerts/[status]';
+
+const mockStore = new Map<string, string>();
+jest.mock('expo-secure-store', () => ({
+  getItemAsync: async (k: string) => mockStore.get(k) ?? null,
+  setItemAsync: async (k: string, v: string) => void mockStore.set(k, v),
+  deleteItemAsync: async (k: string) => void mockStore.delete(k),
+}));
+
+const DAY = 86_400_000;
+const TODAY = new Date(2026, 10, 6); // Fri 6 Nov 2026
+
+const routes = (repos: Repos) => ({
+  _layout: () => (
+    <ToastProvider>
+      <AppShell repos={repos} />
+    </ToastProvider>
+  ),
+  '(tabs)/_layout': TabsLayout,
+  '(tabs)/index': Home,
+  '(tabs)/stock': () => <CategoryList />,
+  '(tabs)/check': () => null,
+  '(tabs)/settings': () => null,
+  'alerts/[status]': Alerts,
+});
+
+type Row = [
+  cat: string,
+  med: string,
+  company: string,
+  batch: string,
+  y: number,
+  m: number,
+  qty: number,
+  unit?: Unit,
+];
+// Today is 6 Nov 2026: Sep/Oct 2026 expired, Nov 2026 within 30 days, Dec 2026 / Jan 2027 within 90.
+const ROWS: Row[] = [
+  ['Antibiotics', 'Amoxil', 'Cipla', 'A1', 2026, 10, 4],
+  ['Antibiotics', 'Azithral', 'Alembic', 'A2', 2026, 9, 2],
+  ['Pain relief', 'Crocin', 'GSK', 'P1', 2026, 10, 3],
+  ['Cough syrups', 'Benadryl', 'J&J', 'C1', 2026, 11, 6, 'bottle'],
+  ['Cough syrups', 'Corex', 'Pfizer', 'C2', 2026, 11, 1, 'bottle'],
+  ['Balms', 'Volini', 'Sun', 'B1', 2026, 11, 2, 'tube'],
+  ['Balms', 'Moov', 'Reckitt', 'B2', 2026, 11, 3, 'tube'],
+  ['Pain relief', 'Dolo', 'Micro Labs', 'D1', 2026, 11, 10],
+  ['Lotions', 'Candid', 'Glenmark', 'L1', 2026, 12, 1, 'bottle'],
+  ['Lotions', 'Cetaphil', 'Galderma', 'L2', 2026, 12, 2, 'bottle'],
+  ['Lotions', 'Nivea', 'Beiersdorf', 'L3', 2026, 12, 3, 'bottle'],
+  ...Array.from({ length: 11 }, (_, i): Row => [
+    'Vitamins',
+    `Zincovit ${i}`,
+    'Apex',
+    `V${i}`,
+    2027,
+    1,
+    1,
+  ]),
+  ['Others', 'Eno', 'Haleon', 'E1', 2028, 12, 5],
+];
+
+async function seed(opts: { checked?: Record<string, number | null> } = {}) {
+  let t = 1;
+  const repos = createMemoryRepos(() => t++);
+  const { shopId, deviceId } = await repos.shop.createShop('Anand Medicals', 'Priya');
+  let cats: Category[] = [];
+  repos.inventory.watchCategories(shopId, (c) => (cats = c))();
+  const id = (name: string) => cats.find((c) => c.name === name)!.id;
+  for (const [cat, med, company, batchNo, year, month, qty, unit] of ROWS) {
+    await repos.inventory.saveIntake(
+      shopId,
+      [
+        {
+          ...emptyDraft('manual'),
+          medicineName: med,
+          companyName: company,
+          categoryId: id(cat),
+          unit: unit ?? 'strip',
+          batchNo,
+          expiry: { year, month },
+          qty,
+        },
+      ],
+      null,
+      deviceId,
+    );
+  }
+  // Every category checked recently unless overridden; null = never.
+  for (const c of cats) {
+    const days = opts.checked?.[c.name];
+    const lastCheckedAt =
+      days === undefined
+        ? TODAY.getTime() - DAY
+        : days === null
+          ? null
+          : TODAY.getTime() - days * DAY;
+    await repos.inventory.upsertCategory(shopId, { ...c, lastCheckedAt });
+  }
+  mockStore.set('session', JSON.stringify({ shopId, deviceId, displayName: 'Priya' }));
+  return { repos, shopId, deviceId };
+}
+
+const open = async (repos: Repos, url = '/') => {
+  const r = await renderRouter(routes(repos), { initialUrl: url });
+  await screen.findByRole('header', { name: 'Anand Medicals' }).catch(() => undefined);
+  return r;
+};
+
+beforeEach(() => {
+  mockStore.clear();
+  // Fake only Date so timers and promises keep running.
+  jest.useFakeTimers({
+    now: new Date(2026, 10, 6, 10),
+    doNotFake: [
+      'setTimeout',
+      'clearTimeout',
+      'setInterval',
+      'clearInterval',
+      'setImmediate',
+      'clearImmediate',
+      'nextTick',
+      'queueMicrotask',
+      'requestAnimationFrame',
+      'cancelAnimationFrame',
+      'performance',
+    ],
+  });
+});
+afterEach(() => {
+  jest.useRealTimers();
+  jest.restoreAllMocks();
+});
+
+describe('home', () => {
+  it('shows the shop name, date, sync text and the three counts', async () => {
+    const { repos } = await seed();
+    await open(repos);
+    expect(await screen.findByText('Fri 6 Nov · synced')).toBeOnTheScreen();
+    expect(await screen.findByRole('button', { name: 'Expired 3' })).toBeOnTheScreen();
+    expect(screen.getByRole('button', { name: 'In 30 days 5' })).toBeOnTheScreen();
+    expect(screen.getByRole('button', { name: 'In 90 days 14' })).toBeOnTheScreen();
+  });
+
+  it('derives the strip labels from alertDays', async () => {
+    const { repos, shopId, deviceId } = await seed();
+    await repos.shop.updateShop(shopId, { alertDays: { first: 90, second: 60 } }, deviceId);
+    await open(repos);
+    expect(await screen.findByRole('button', { name: 'In 60 days 8' })).toBeOnTheScreen();
+    expect(screen.getByRole('button', { name: 'In 90 days 11' })).toBeOnTheScreen();
+  });
+
+  it('shows one worst-status pill per category and none for all-ok ones', async () => {
+    const { repos } = await seed();
+    await open(repos, '/stock'); // the Stock tab shows the full list
+    const row = async (name: string) =>
+      within(await screen.findByRole('button', { name: new RegExp(`^${name},`) }));
+    expect((await row('Antibiotics')).getByText('2 expired')).toBeOnTheScreen();
+    expect((await row('Antibiotics')).getByText('2 medicines · 6 units')).toBeOnTheScreen();
+    expect((await row('Cough syrups')).getByText('2 soon')).toBeOnTheScreen();
+    expect((await row('Lotions')).getByText('3 in 90 days')).toBeOnTheScreen();
+    expect((await row('Others')).queryByTestId('status-pill')).toBeNull();
+  });
+
+  it('opens the soon list, soonest first, with date pill and qty line', async () => {
+    const { repos } = await seed();
+    const r = await open(repos);
+    await fireEvent.press(await screen.findByRole('button', { name: 'In 30 days 5' }));
+    expect(await screen.findByRole('header', { name: 'Expiring in 30 days' })).toBeOnTheScreen();
+    expect(r.getPathname()).toBe('/alerts/soon');
+    expect(screen.getAllByTestId('status-pill')).toHaveLength(5);
+    expect(screen.getAllByText(/ · Batch /).map((n) => n.props.children)).toEqual([
+      'J&J · Batch C1',
+      'Pfizer · Batch C2',
+      'Sun · Batch B1',
+      'Reckitt · Batch B2',
+      'Micro Labs · Batch D1',
+    ]);
+    const first = within(screen.getByRole('button', { name: 'Benadryl, J&J · Batch C1' }));
+    expect(first.getByText('Nov 2026')).toBeOnTheScreen();
+    expect(first.getByText('6 bottles')).toBeOnTheScreen();
+  });
+
+  it('the expired list is soonest first and rows open the medicine', async () => {
+    const { repos } = await seed();
+    await open(repos, '/alerts/expired');
+    expect(await screen.findByRole('header', { name: 'Expired' })).toBeOnTheScreen();
+    expect(screen.getAllByText(/ · Batch /).map((n) => n.props.children)).toEqual([
+      'Alembic · Batch A2',
+      'Cipla · Batch A1',
+      'GSK · Batch P1',
+    ]);
+    const push = jest.spyOn(router, 'push').mockImplementation(() => {});
+    await fireEvent.press(screen.getByRole('button', { name: 'Azithral, Alembic · Batch A2' }));
+    expect(push).toHaveBeenCalledWith(expect.stringMatching(/^\/medicine\/.+/));
+  });
+
+  it('strip counts and category rows navigate', async () => {
+    const { repos } = await seed();
+    await open(repos);
+    const push = jest.spyOn(router, 'push').mockImplementation(() => {});
+    await fireEvent.press(await screen.findByRole('button', { name: 'Expired 3' }));
+    expect(push).toHaveBeenLastCalledWith('/alerts/expired');
+    await fireEvent.press(screen.getByRole('button', { name: 'In 90 days 14' }));
+    expect(push).toHaveBeenLastCalledWith('/alerts/watch');
+    await fireEvent.press(screen.getByRole('button', { name: /^Antibiotics,/ }));
+    expect(push).toHaveBeenLastCalledWith(expect.stringMatching(/^\/category\/.+/));
+  });
+
+  it('reminds about the category checked longest ago', async () => {
+    const { repos } = await seed({ checked: { Balms: 18 } });
+    await open(repos);
+    expect(await screen.findByText('Balms not checked')).toBeOnTheScreen();
+    expect(screen.getByText('Last stock check 18 days ago')).toBeOnTheScreen();
+    const push = jest.spyOn(router, 'push').mockImplementation(() => {});
+    await fireEvent.press(screen.getByRole('button', { name: 'Start check' }));
+    expect(push).toHaveBeenCalledWith(expect.stringMatching(/^\/check\/.+/));
+  });
+
+  it('a never-checked category wins the reminder', async () => {
+    const { repos } = await seed({ checked: { Balms: 18, Lotions: null } });
+    await open(repos);
+    expect(await screen.findByText('Lotions not checked')).toBeOnTheScreen();
+    expect(screen.getByText('Never checked')).toBeOnTheScreen();
+  });
+
+  it('an empty shop shows 0 / 0 / 0 and the seeded categories with 0 medicines', async () => {
+    const repos = createMemoryRepos();
+    const { shopId, deviceId } = await repos.shop.createShop('Anand Medicals', 'Priya');
+    mockStore.set('session', JSON.stringify({ shopId, deviceId, displayName: 'Priya' }));
+    await open(repos);
+    expect(await screen.findByRole('button', { name: 'Expired 0' })).toBeOnTheScreen();
+    expect(screen.getByRole('button', { name: 'In 30 days 0' })).toBeOnTheScreen();
+    expect(screen.getByRole('button', { name: 'In 90 days 0' })).toBeOnTheScreen();
+    expect(
+      screen.getByRole('button', { name: 'Antibiotics, 0 medicines · 0 units' }),
+    ).toBeOnTheScreen();
+  });
+
+  it('shows skeletons while the inventory is loading', async () => {
+    const repos = createMemoryRepos();
+    const { shopId, deviceId } = await repos.shop.createShop('Anand Medicals', 'Priya');
+    mockStore.set('session', JSON.stringify({ shopId, deviceId, displayName: 'Priya' }));
+    jest.spyOn(repos.inventory, 'watchLiveBatches').mockReturnValue(() => {});
+    await open(repos);
+    expect((await screen.findAllByLabelText('Loading')).length).toBeGreaterThan(0);
+    expect(screen.queryByRole('button', { name: /^Expired/ })).toBeNull();
+  });
+});

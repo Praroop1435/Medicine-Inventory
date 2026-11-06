@@ -135,6 +135,10 @@ export function createMemoryRepos(now: () => number = Date.now): Repos {
       },
     },
     inventory: {
+      watchSyncState: (_shopId, cb) => {
+        cb({ online: true, pending: 0 });
+        return () => {};
+      },
       watchCategories: (shopId, cb) =>
         watch(shopId, (s) => [...s.categories].sort((a, b) => a.order - b.order), cb),
       watchCompanies: (shopId, cb) => watch(shopId, (s) => s.companies, cb),

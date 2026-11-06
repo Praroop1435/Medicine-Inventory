@@ -67,10 +67,10 @@ describe('onboarding', () => {
     ).toBeOnTheScreen();
     expect(screen.getByRole('button', { name: 'Save QR image' })).toBeOnTheScreen();
     expect(r.getPathname()).toBe('/onboarding/qr');
-    expect(screen.queryByRole('header', { name: 'Home' })).toBeNull();
+    expect(screen.queryByRole('header', { name: 'Anand Medicals' })).toBeNull();
 
     await fireEvent.press(screen.getByRole('button', { name: 'I saved it' }));
-    expect(await screen.findByRole('header', { name: 'Home' })).toBeOnTheScreen();
+    expect(await screen.findByRole('header', { name: 'Anand Medicals' })).toBeOnTheScreen();
 
     const session = JSON.parse(mockStore.get('session') ?? 'null');
     expect(session).toMatchObject({ displayName: 'Priya' });
@@ -87,7 +87,7 @@ describe('onboarding', () => {
     await fireEvent.changeText(await screen.findByLabelText('Your name'), 'Ravi');
     await fireEvent.press(screen.getByRole('button', { name: 'Join' }));
 
-    expect(await screen.findByRole('header', { name: 'Home' })).toBeOnTheScreen();
+    expect(await screen.findByRole('header', { name: 'Anand Medicals' })).toBeOnTheScreen();
     expect(devices(repos, shopId).map((d) => d.displayName)).toEqual(['Priya', 'Ravi']);
     expect(JSON.parse(mockStore.get('session') ?? 'null')).toMatchObject({
       shopId,
@@ -118,7 +118,7 @@ describe('onboarding', () => {
     mockStore.set('session', JSON.stringify({ shopId, deviceId, displayName: 'Priya' }));
     const join = jest.spyOn(repos.shop, 'joinShop');
     await renderRouter(routes(repos), { initialUrl: '/' });
-    expect(await screen.findByRole('header', { name: 'Home' })).toBeOnTheScreen();
+    expect(await screen.findByRole('header', { name: 'Anand Medicals' })).toBeOnTheScreen();
     expect(join).not.toHaveBeenCalled();
   });
 
