@@ -22,6 +22,11 @@ const b: Batch = {
 };
 
 describe('converters', () => {
+  it('reads a double qty (9.0 from Android increment) as an integer', () => {
+    const d = { ...batchToDoc(b), qty: 8.999999999 };
+    expect(batchFromDoc('b1', d).qty).toBe(9);
+  });
+
   it('stores expiry as a sortable YYYYMM number', () => {
     expect(toExpiryKey({ year: 2027, month: 6 })).toBe(202706);
     expect(toExpiryKey({ year: 2026, month: 12 })).toBeLessThan(

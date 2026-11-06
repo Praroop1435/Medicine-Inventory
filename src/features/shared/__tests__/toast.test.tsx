@@ -46,6 +46,7 @@ it('sits above the tab bar and docked footers, plus the bottom inset', async () 
 describe('errorCopy', () => {
   const FALLBACK = "Couldn't save. Check the connection and try again.";
   it.each([
+    [new Error('write refused'), "Couldn't save that change. Try again."],
     [new Error('device is not a member of this shop'), 'This phone was removed from the shop.'],
     [
       Object.assign(

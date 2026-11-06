@@ -48,11 +48,14 @@ service cloud.firestore {
         allow create: if isMemberAfter(shopId); // append-only audit trail
       }
 
-      // Phones write qty as increments while offline; it must stay an integer. It may go below
+      // Phones write qty as increments while offline; it must stay a whole number
+      // (React Native Firebase sends increment() results as doubles). It may go below
       // zero when two phones sell the last unit offline, and must not be rejected then.
       match /batches/{batchId} {
         allow read: if isMember(shopId);
-        allow create, update: if isMemberAfter(shopId) && request.resource.data.qty is int;
+        allow create, update: if isMemberAfter(shopId) && (request.resource.data.qty is int
+          || (request.resource.data.qty is float
+              && request.resource.data.qty == math.floor(request.resource.data.qty)));
       }
 
       match /{sub}/{docId} {

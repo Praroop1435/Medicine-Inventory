@@ -23,7 +23,8 @@ export function batchToDoc(b: Batch): BatchDoc {
 }
 export function batchFromDoc(id: string, d: BatchDoc): Batch {
   const { expiryKey, ...rest } = d;
-  return { ...rest, id, expiry: fromExpiryKey(expiryKey) };
+  // Android increment() results come back as doubles (9.0); keep qty a JS integer.
+  return { ...rest, id, qty: Math.round(rest.qty), expiry: fromExpiryKey(expiryKey) };
 }
 
 // Device docs also carry the joinSecret used to pass the join rule; it is not part of Device.

@@ -55,6 +55,7 @@ export function useToast(): Show {
 /** What a failed action toasts: never raw Firebase/JS text, only copy a shopkeeper can act on. */
 export function errorCopy(e: unknown, fallback: string): string {
   const raw = `${(e as { code?: unknown } | null)?.code ?? ''} ${e instanceof Error ? e.message : ''}`;
+  if (/write refused/i.test(raw)) return "Couldn't save that change. Try again.";
   if (/not a member|permission-denied|insufficient permissions/i.test(raw))
     return 'This phone was removed from the shop.';
   if (/network|offline|unavailable|internet|timed? ?out/i.test(raw))

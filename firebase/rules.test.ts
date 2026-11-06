@@ -88,6 +88,31 @@ describe('membership', () => {
     await assertFails(setDoc(doc(f, 'shops/s1/devices/fake'), device(SECRET)));
   });
 
+  // The JS SDK always writes whole numbers as ints, but React Native Firebase sends
+  // increment() results as doubles, so write a real double through the emulator's REST API.
+  it('a member may write a whole-number double qty; a fractional double is refused', async () => {
+    const host = env.emulators.firestore!;
+    const token = (uid: string) =>
+      ['{"alg":"none"}', JSON.stringify({ user_id: uid, sub: uid })]
+        .map((x) => Buffer.from(x).toString('base64url'))
+        .join('.') + '.';
+    const patch = async (uid: string, qty: number) =>
+      (
+        await fetch(
+          `http://${host.host}:${host.port}/v1/projects/demo-medstock/databases/(default)/documents/shops/s1/batches/b1?updateMask.fieldPaths=qty`,
+          {
+            method: 'PATCH',
+            headers: { Authorization: `Bearer ${token(uid)}` },
+            body: JSON.stringify({ fields: { qty: { doubleValue: qty } } }),
+          },
+        )
+      ).status;
+    expect(await patch('alice', 9)).toBe(200); // JSON 9 is sent as doubleValue 9
+    expect(await patch('alice', -1)).toBe(200);
+    expect(await patch('alice', 9.5)).toBe(403);
+    expect(await patch('bob', 9)).toBe(403);
+  });
+
   it('batch qty must stay an integer; increments are allowed, deletes are not', async () => {
     const f = db('alice');
     await assertSucceeds(updateDoc(doc(f, 'shops/s1/batches/b1'), { qty: increment(-1) }));

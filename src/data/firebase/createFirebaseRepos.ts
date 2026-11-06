@@ -130,7 +130,15 @@ export function createFirebaseRepos(opts: { onWriteError?: (e: Error) => void } 
   ): Unsub => onSnapshot(q, (s) => cb(s.docs.map((d) => map(d.id, d.data()))), onError);
 
   const commit = (wb: WriteBatch) =>
-    void wb.commit().catch((e: unknown) => onWriteError(asMemberError(e) as Error));
+    void wb
+      .commit()
+      .catch((e: unknown) =>
+        onWriteError(
+          (e as CodedError).code === 'firestore/permission-denied'
+            ? new Error('write refused')
+            : (e as Error),
+        ),
+      );
   const write = (fill: (wb: WriteBatch) => void) => {
     const wb = writeBatch(db);
     fill(wb);
