@@ -224,3 +224,30 @@ src/
 
 ## 10. Open items
 - Real distributor bill photos: needed to tune the OCR parser and decide whether OCR alone is accurate enough **[owner will provide]**.
+
+---
+
+## 11. Changes requested by the owner (2026-11-06, after first build pass)
+
+### 11.1 Nested categories ("files and folders") **[owner]**
+- A category can contain **sub-categories and medicines at the same time**, to any depth, like folders containing folders and files. `Category` gains `parentId: string | null` (null = top level).
+- **Stock tab = the top-level folder.** Opening a category shows, in order: its sub-folders (each with rolled-up counts and worst-status pill), then its own medicines (Needs action / All good, as before). Back goes to the parent folder; the header shows the path ("Syrups › Cough").
+- **"+ New folder" inside any category** creates a sub-category there **[owner]**. Each folder row has a ⋯ menu: Rename · Move to… · Delete. Delete is allowed only when the folder is empty (no sub-folders, no medicines) **[call]** — safe, no accidental loss.
+- **Counts roll up:** a folder's medicine/unit counts and its worst-status pill include everything inside it, recursively **[call]**. Home shows top-level folders only, with rolled-up pills.
+- **Stock check of a folder covers everything inside it, recursively** **[call]**, grouped by sub-folder then company.
+- Intake's category picker becomes a folder picker showing paths ("Syrups › Cough"); "+ New folder" is available there too.
+- Ordering (Edit order / Up–Down) is per sibling group.
+
+### 11.2 Any unit type **[owner]**
+- `Unit` becomes a free string. Each shop keeps a units list (`Shop.units: string[]`), seeded with: strip, tablet, capsule, bottle, carton, box, tube, can, piece, sachet, vial, ampoule, jar, inhaler, drops, packet **[call]**.
+- Wherever a unit is picked (review card, manual entry), the chips show the shop's units plus **"+ Add unit"**, which adds a new unit to the shop list for everyone **[owner: "so I can add any type"]**.
+- Plurals: known units use their proper plural; custom units add "s" (or "es" after s/x/ch/sh) **[call]**.
+- Bulk import and voice accept any unit in the shop list (singular or plural); an unknown unit in bulk is an error row, in voice it leaves unit empty (review asks).
+
+### 11.3 Minimal Settings **[owner]**
+Settings shows only four things **[call]**:
+1. **Expiry alerts** — first and second warning (days) and the daily notification time.
+2. **Phones** — list of joined phones, remove one, show the join QR (recovery key).
+3. **This phone's name.**
+4. **App** — version and "Check for update".
+Category and company management move out of Settings: categories are managed inside the Stock folders (§11.1); company rename/merge is dropped from v1 (companies are corrected on the review card) **[call]**.

@@ -424,3 +424,20 @@ firebase/      firestore.rules firestore.indexes.json  rules.test.ts
 - Spec coverage: §3 goals → Tasks 9–17. §4 data/rules → 2–5. §5 sync/no-login/equal phones/recovery/scale → 6, 8, 17, 18. §6.1–6.8 screens → 9–17. §7 visual → 7 + 18 spacing pass. §8 engineering → 1, 5, 6, 7, 12. §10 real bills → the Task 15 fixture is replaced when bills arrive.
 - Type names are consistent across tasks: `DraftBatch`, `YearMonth`, `BatchStatus`, `AlertDays`, `Repos`, `CheckRepo`, `BillHeader`.
 - One correction made inline: the medicine screen's "Next expiry" shows month precision ("Nov 2026"), because expiry is stored as a month. The mockup's "20 Nov" was sample data.
+
+---
+
+## Owner change requests (spec §11) — added 2026-11-06
+
+Execution order: Task 15b (real-bill parser, in flight) → Task 16b → Task 16c → Task 17 (now minimal, per §11.3) → Task 18.
+
+### Task 16b: Nested categories (folders)
+**Files:** Modify `src/domain/types.ts` (Category.parentId), `src/data/repositories.ts` + memory + firebase + contract (upsertCategory with parentId, `moveCategory(shopId, id, newParentId, deviceId)` rejecting cycles, `deleteCategory(shopId, id, deviceId)` rejecting non-empty, reorderCategories per sibling group); Create `src/domain/tree.ts` (`childrenOf`, `descendantIds`, `pathOf`, `rollupSummary`) + tests; Modify Stock/Category screens, CategoryList, Home category list, Check (recursive scope), intake category picker (path labels + New folder).
+**Tests:** tree helpers (depth 3, cycles rejected, rollup counts/worst status across sub-folders); contract (move rejects cycle, delete rejects non-empty, existing categories migrate as parentId null); screens (folder shows sub-folders then medicines, New folder creates child, path header, ⋯ rename/move/delete-empty, Home shows only top-level with rolled-up pill, check of a parent includes child batches).
+
+### Task 16c: Any unit type
+**Files:** Modify `src/domain/types.ts` (Unit = string; `DEFAULT_UNITS`; Shop.units), `src/lib/format.ts` (pluralUnit for custom units), data layer (`addUnit(shopId, unit, deviceId)`, createShop seeds DEFAULT_UNITS, shops without `units` fall back to DEFAULT_UNITS), ReviewCard/Manual unit chips + "+ Add unit", bulk parser + voice parser accept shop units (pass the list in).
+**Tests:** pluralUnit for known + custom ("capsule"→"capsules", "box"→"boxes", "ampoule"→"ampoules", custom "kit"→"kits"); addUnit dedupes case-insensitively; review "+ Add unit" adds and selects it; bulk accepts a custom shop unit and rejects an unknown one; voice recognises "3 vials" when "vial" is in the list.
+
+### Task 17 (revised): Minimal Settings + daily notification
+Settings = Expiry alerts (two day fields + time) · Phones (list, remove, show join QR) · This phone's name · App (version, Check for update). No category/company management. Daily notification as originally planned (`dailyMessage`, Notifier, useDailyAlert).
