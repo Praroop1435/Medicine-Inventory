@@ -23,6 +23,8 @@ const expoConfig: ExpoConfig = {
   },
   plugins: [
     'expo-router',
+    '@react-native-firebase/app',
+    '@react-native-firebase/auth',
     [
       'expo-splash-screen',
       { backgroundColor: '#f2f5f2', image: './assets/images/splash-icon.png', imageWidth: 76 },
