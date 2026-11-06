@@ -2,7 +2,12 @@ import { readFileSync } from 'fs';
 import { join } from 'path';
 import type { OcrLine } from '../OcrEngine';
 import { normalizeOrientation, parseBillText, qtyFromToken } from '../billParser';
-import { realBillLines, rotated } from '../__fixtures__/real-bill-swastik';
+import {
+  centredRightBillLines,
+  leftLabelBillLines,
+  realBillLines,
+  rotated,
+} from '../__fixtures__/real-bill-swastik';
 
 const lines: OcrLine[] = readFileSync(
   join(__dirname, '../__fixtures__/bill-raj-pharma.txt'),
@@ -189,6 +194,34 @@ describe('column rules', () => {
     expect(noHeaders.uncertain).toContain('qty');
   });
 
+  it('flags qty when OCR splits the QTY cell or garbles Free, and still reads "20 + 20"', () => {
+    const d = one([
+      ...cols,
+      ...at(70, [
+        [0, 'X'],
+        [100, 'A1'],
+        [200, '08/27'],
+        [300, '20'],
+        [315, '+'],
+        [325, '20'],
+      ]),
+    ]);
+    expect(d.qty).toBe(40);
+    expect(d.uncertain).toContain('qty');
+    const badFree = one([
+      ...cols,
+      ...at(70, [
+        [0, 'X'],
+        [100, 'A1'],
+        [200, '08/27'],
+        [300, '5'],
+        [400, 'l'],
+      ]),
+    ]);
+    expect(badFree.qty).toBe(5);
+    expect(badFree.uncertain).toContain('qty');
+  });
+
   it('uses the Batch column over a batch-like name word', () => {
     const d = one([
       ...cols,
@@ -219,6 +252,19 @@ describe('column rules', () => {
   });
 });
 
+// prettier-ignore
+const ROWS9 = [
+  ['MOROFER SYP', 'VHL2606003', { year: 2027, month: 11 }, 40, 'MORAL PH', '1*300M'],
+  ['CLAVAM BID DRY SYP', '2642275', { year: 2028, month: 5 }, 36, 'ALKEM MA', '1*30ML'],
+  ['CLAVAM BID DRY SYP', '2641338', { year: 2028, month: 3 }, 18, 'ALKEM MA', '1*60ML'],
+  ['CLAVAM BID DRY SYP', '2643648', { year: 2028, month: 8 }, 18, 'ALKEM MA', '1*60ML'],
+  ['CLAVAM DRY SYP', '2642497', { year: 2028, month: 5 }, 36, 'ALKEM MA', '1*30ML'],
+  ['CLAVAM 625 TAB', '26441959', { year: 2027, month: 10 }, 24, 'ALKEM MA', '1*10'],
+  ['SUMO ACE TAB', '26230007', { year: 2028, month: 4 }, 20, 'ALKEM PL', '1*10'],
+  ['NOWORM SUSP', '26490871', { year: 2028, month: 7 }, 25, 'ALKEM AL', '1*10ML'],
+  ['SWICH 50MG DRY SYP', '26461024', { year: 2027, month: 11 }, 20, 'ALKEM NE', '1*30ML'],
+];
+
 describe('real distributor bill (Swastik layout)', () => {
   const strip = (r: ReturnType<typeof parseBillText>) => ({
     header: r.header,
@@ -234,27 +280,16 @@ describe('real distributor bill (Swastik layout)', () => {
     });
   });
 
+  const rowsOf = (r: ReturnType<typeof parseBillText>) =>
+    r.drafts.map((d) => [d.medicineName, d.batchNo, d.expiry, d.qty, d.companyName, d.packInfo]);
+
   it('parses all 9 rows from the columns', () => {
-    expect(
-      real.drafts.map((d) => [
-        d.medicineName,
-        d.batchNo,
-        d.expiry,
-        d.qty,
-        d.companyName,
-        d.packInfo,
-      ]),
-    ).toEqual([
-      ['MOROFER SYP', 'VHL2606003', { year: 2027, month: 11 }, 40, 'MORAL PH', '1*300M'],
-      ['CLAVAM BID DRY SYP', '2642275', { year: 2028, month: 5 }, 36, 'ALKEM MA', '1*30ML'],
-      ['CLAVAM BID DRY SYP', '2641338', { year: 2028, month: 3 }, 18, 'ALKEM MA', '1*60ML'],
-      ['CLAVAM BID DRY SYP', '2643648', { year: 2028, month: 8 }, 18, 'ALKEM MA', '1*60ML'],
-      ['CLAVAM DRY SYP', '2642497', { year: 2028, month: 5 }, 36, 'ALKEM MA', '1*30ML'],
-      ['CLAVAM 625 TAB', '26441959', { year: 2027, month: 10 }, 24, 'ALKEM MA', '1*10'],
-      ['SUMO ACE TAB', '26230007', { year: 2028, month: 4 }, 20, 'ALKEM PL', '1*10'],
-      ['NOWORM SUSP', '26490871', { year: 2028, month: 7 }, 25, 'ALKEM AL', '1*10ML'],
-      ['SWICH 50MG DRY SYP', '26461024', { year: 2027, month: 11 }, 20, 'ALKEM NE', '1*30ML'],
-    ]);
+    expect(rowsOf(real)).toEqual(ROWS9);
+  });
+
+  it('parses all 9 rows with right-aligned numbers, labels left-aligned or centred', () => {
+    expect(rowsOf(parseBillText(leftLabelBillLines))).toEqual(ROWS9);
+    expect(rowsOf(parseBillText(centredRightBillLines))).toEqual(ROWS9);
   });
 
   it('flags expiry, batchNo and the truncated company on every row, nothing else', () => {
@@ -269,8 +304,8 @@ describe('real distributor bill (Swastik layout)', () => {
     expect(header.billDate).toBe('02/11/26');
   });
 
-  it('gives identical output for a sideways or upside-down photo', () => {
-    for (const deg of [90, 180, 270] as const)
+  it('gives identical output for a skewed, sideways or upside-down photo', () => {
+    for (const deg of [3, -3, 7, -7, 20, -20, 35, -35, 90, 180, 270])
       expect(strip(parseBillText(rotated(realBillLines, deg)))).toEqual(strip(real));
   });
 });
@@ -280,6 +315,11 @@ describe('normalizeOrientation', () => {
     expect(normalizeOrientation(realBillLines)).toEqual(realBillLines);
     const plain: OcrLine[] = [{ text: 'a', top: 1, left: 2 }];
     expect(normalizeOrientation(plain)).toEqual(plain);
+  });
+
+  it('ignores a skew under 0.3 degrees', () => {
+    const tiny = rotated(realBillLines, 0.2);
+    expect(normalizeOrientation(tiny)).toBe(tiny);
   });
 
   it('turns a sideways photo back into reading orientation', () => {

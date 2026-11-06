@@ -92,20 +92,38 @@ function parseRow(toks: Tok[], cols: Cols): DraftBatch | null {
 
 type Head = { key: string; left: number; right: number };
 const word = (t: string) => t.toLowerCase().replace(/[^a-z]/g, '');
-const centre = (l: OcrLine) => l.left + (l.width ?? 0) / 2;
+const MONEY = /^\d+\.\d\d$/;
+const right = (l: OcrLine) => l.left + (l.width ?? 0);
 const isTableHeader = (r: OcrLine[]) => {
   const w = new Set(r.flatMap((l) => l.text.split(/\s+/).map(word)));
   return w.has('batch') && (w.has('exp') || w.has('expiry')) && w.has('qty');
 };
 
-/** One table row read column by column: each word goes to the header label nearest its centre. */
-function parseColumnRow(row: OcrLine[], heads: Head[]): DraftBatch | null {
+/**
+ * Groups a row's words into cells: a wide gap, crossing the start of a header label, or a money
+ * amount ("205.00", often right-aligned one space before the next column) starts a new cell.
+ */
+function toCells(row: OcrLine[], heads: Head[], ch: number): OcrLine[][] {
+  const cells: OcrLine[][] = [];
+  row.forEach((l, i) => {
+    const p = row[i - 1];
+    const crosses = p && heads.some((h) => p.left < h.left - ch / 2 && l.left >= h.left - ch / 2);
+    const money = p && (MONEY.test(p.text.trim()) || MONEY.test(l.text.trim()));
+    if (!p || crosses || money || l.left - right(p) > 1.5 * ch) cells.push([l]);
+    else cells[cells.length - 1].push(l);
+  });
+  return cells;
+}
+
+/** One table row read column by column: each cell goes to the header label it overlaps most. */
+function parseColumnRow(row: OcrLine[], heads: Head[], ch: number): DraftBatch | null {
   const cells = new Map<string, string[]>();
-  for (const l of row) {
-    const c = centre(l);
-    const gap = (h: Head) => Math.max(h.left - c, 0, c - h.right);
-    const key = heads.reduce((a, b) => (gap(b) < gap(a) ? b : a)).key;
-    cells.set(key, [...(cells.get(key) ?? []), ...l.text.trim().split(/\s+/)]);
+  for (const c of toCells(row, heads, ch)) {
+    const [l, r] = [c[0].left, Math.max(...c.map(right))];
+    // overlap with the label; negative = distance to it, so no overlap falls back to the nearest
+    const ov = (h: Head) => Math.min(r, h.right) - Math.max(l, h.left);
+    const key = heads.reduce((a, b) => (ov(b) > ov(a) ? b : a)).key;
+    cells.set(key, [...(cells.get(key) ?? []), ...c.flatMap((w) => w.text.trim().split(/\s+/))]);
   }
   const cell = (...keys: string[]) => keys.flatMap((k) => cells.get(k) ?? []);
   const batch = cell('batch').find((t) => /^[A-Za-z0-9-]+$/.test(t) && /\d/.test(t));
@@ -115,12 +133,13 @@ function parseColumnRow(row: OcrLine[], heads: Head[]): DraftBatch | null {
   d.medicineName = cell('product', 'item').join(' ').replace(/\.+$/, '');
   d.batchNo = batch?.toUpperCase() ?? '';
   d.expiry = exp ? parseExpiry(exp) : null;
-  const q =
-    cell('qty')
-      .map(qtyFromToken)
-      .find((n) => n !== null) ?? null;
-  const free = cell('free').find((t) => /^\d+$/.test(t));
-  d.qty = q === null ? null : q + Number(free ?? 0);
+  const qt = cell('qty');
+  const ft = cell('free');
+  const joined = qt.join('');
+  // OCR can split "20+20" into "20 + 20": rejoin only around a "+", and always flag a split cell
+  const q = qt.length === 1 || joined.includes('+') ? qtyFromToken(joined) : null;
+  const freeOk = !ft.length || (ft.length === 1 && /^\d+$/.test(ft[0]));
+  d.qty = q === null ? null : q + (freeOk ? Number(ft[0] ?? 0) : 0);
   d.companyName = cell('mfg').join(' ');
   const pack = cell('pack').find((t) => /\d/.test(t)); // skips handwritten tick marks
   if (pack) d.packInfo = pack;
@@ -128,30 +147,39 @@ function parseColumnRow(row: OcrLine[], heads: Head[]): DraftBatch | null {
   // MFG cells are truncated division codes ("ALKEM MA"): the user confirms or a match replaces it.
   if (d.companyName) d.uncertain.push('companyName');
   if (!d.medicineName) d.uncertain.push('medicineName');
-  if (d.qty === null) d.uncertain.push('qty');
+  if (d.qty === null || qt.length > 1 || !freeOk) d.uncertain.push('qty');
   return d;
 }
 
+const wrap = (a: number) => Math.atan2(Math.sin(a), Math.cos(a));
+// exact for quarter turns, so a sideways photo maps back to the same integer coordinates
+const snap = (v: number) => (Math.abs(v - Math.round(v)) < 1e-9 ? Math.round(v) : v);
+
 /**
- * Turns the lines of a sideways or upside-down photo into reading orientation, using the median
- * text direction of their corner points. Lines without corners (or an upright photo) pass through.
+ * Turns the lines of a skewed, sideways or upside-down photo into reading orientation, by the
+ * median text direction of their corner points. Lines without corners, or a skew under 0.3°, pass.
  */
 export function normalizeOrientation(lines: OcrLine[]): OcrLine[] {
   const angles = lines.flatMap(({ corners: c }) =>
     c && c.length > 1 ? [Math.atan2(c[1].y - c[0].y, c[1].x - c[0].x)] : [],
   );
   if (!angles.length) return lines;
-  const turns = Math.round(median(angles) / (Math.PI / 2));
-  if (turns % 4 === 0) return lines;
-  const cos = Math.round(Math.cos((turns * Math.PI) / 2));
-  const sin = Math.round(Math.sin((turns * Math.PI) / 2));
+  const rough = median(angles); // then a median of deviations, so ±180° readings don't split
+  const a = wrap(rough + median(angles.map((x) => wrap(x - rough))));
+  if (Math.abs(a) < (0.3 * Math.PI) / 180) return lines;
+  const [cos, sin] = [snap(Math.cos(a)), snap(Math.sin(a))];
   return lines.map((l) => {
-    const pts = (
-      l.corners ?? [
-        { x: l.left, y: l.top },
-        { x: l.left + (l.width ?? 0), y: l.top + (l.height ?? 0) },
-      ]
-    ).map(({ x, y }) => ({ x: x * cos + y * sin, y: y * cos - x * sin }));
+    const { left: x, top: y, width: w = 0, height: h = 0 } = l;
+    const box = [
+      { x, y },
+      { x: x + w, y },
+      { x: x + w, y: y + h },
+      { x, y: y + h },
+    ];
+    const pts = (l.corners ?? box).map((p) => ({
+      x: p.x * cos + p.y * sin,
+      y: p.y * cos - p.x * sin,
+    }));
     const xs = pts.map((p) => p.x);
     const ys = pts.map((p) => p.y);
     const left = Math.min(...xs);
@@ -182,14 +210,12 @@ export function parseBillText(lines: OcrLine[]): {
   const header: Partial<BillHeader> = {};
 
   // Supplier: the top-left block. The right block ("M/S <shop>") is the buyer.
-  const mid =
-    (Math.min(...all.map((l) => l.left)) + Math.max(...all.map((l) => l.left + (l.width ?? 0)))) /
-    2;
+  const mid = (Math.min(...all.map((l) => l.left)) + Math.max(...all.map(right))) / 2;
   const supplier = rows
     .slice(0, headIdx >= 0 ? headIdx : rows.length)
     .map((r) =>
       r
-        .filter((l) => centre(l) < mid)
+        .filter((l) => (l.left + right(l)) / 2 < mid)
         .map((l) => l.text.trim())
         .join(' '),
     )
@@ -207,14 +233,12 @@ export function parseBillText(lines: OcrLine[]): {
 
   const drafts: DraftBatch[] = [];
   if (headIdx >= 0) {
-    const heads = rows[headIdx].map((l) => ({
-      key: word(l.text),
-      left: l.left,
-      right: l.left + (l.width ?? 0),
-    }));
+    const heads = rows[headIdx].map((l) => ({ key: word(l.text), left: l.left, right: right(l) }));
+    const chars = all.flatMap((l) => (l.width ? [l.width / l.text.trim().length] : []));
+    const ch = chars.length ? median(chars) : 0;
     for (const row of rows.slice(headIdx + 1)) {
       if (FOOTER.test(row.map((l) => l.text.trim()).join(' '))) break; // table ends at the footer
-      const d = parseColumnRow(row, heads);
+      const d = parseColumnRow(row, heads, ch);
       if (d) drafts.push(d);
     }
     return { header, drafts };
