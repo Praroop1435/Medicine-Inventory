@@ -1,6 +1,15 @@
 import { fireEvent, render, screen } from '@testing-library/react-native';
 import { StyleSheet, Text } from 'react-native';
-import { Button, ButtonRow, CountStrip, Field, IconButton, StatusPill, Stepper } from '@/ui';
+import {
+  Button,
+  ButtonRow,
+  ConfirmDialog,
+  CountStrip,
+  Field,
+  IconButton,
+  StatusPill,
+  Stepper,
+} from '@/ui';
 
 const flat = (el: { props: { style?: unknown } }) =>
   StyleSheet.flatten(el.props.style as never) as Record<string, unknown>;
@@ -101,5 +110,42 @@ describe('IconButton', () => {
     expect(b).toBeDisabled();
     await fireEvent.press(b);
     expect(onPress).not.toHaveBeenCalled();
+  });
+});
+
+describe('ConfirmDialog', () => {
+  const show = async () => {
+    const onConfirm = jest.fn();
+    const onCancel = jest.fn();
+    await render(
+      <ConfirmDialog
+        title="Delete folder “Cough”?"
+        message="This can't be undone."
+        confirmLabel="Delete"
+        destructive
+        onConfirm={onConfirm}
+        onCancel={onCancel}
+      />,
+    );
+    return { onConfirm, onCancel };
+  };
+  it('shows title as a header and the message', async () => {
+    await show();
+    expect(screen.getByRole('header', { name: 'Delete folder “Cough”?' })).toBeOnTheScreen();
+    expect(screen.getByText("This can't be undone.")).toBeOnTheScreen();
+  });
+  it('Cancel only cancels', async () => {
+    const { onConfirm, onCancel } = await show();
+    await fireEvent.press(screen.getByRole('button', { name: 'Cancel' }));
+    expect(onCancel).toHaveBeenCalledTimes(1);
+    expect(onConfirm).not.toHaveBeenCalled();
+  });
+  it('confirm only confirms, with a red destructive button', async () => {
+    const { onConfirm, onCancel } = await show();
+    const del = screen.getByRole('button', { name: 'Delete' });
+    expect(flat(del).backgroundColor).toBe('#c4242a');
+    await fireEvent.press(del);
+    expect(onConfirm).toHaveBeenCalledTimes(1);
+    expect(onCancel).not.toHaveBeenCalled();
   });
 });

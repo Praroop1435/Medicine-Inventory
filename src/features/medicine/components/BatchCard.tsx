@@ -3,7 +3,7 @@ import { View } from 'react-native';
 import { batchStatus, daysUntilExpiry, formatExpiry } from '@/domain/expiry';
 import type { AlertDays, Batch, Bill, Unit } from '@/domain/types';
 import { dayMonth, expiresIn, pluralUnit } from '@/lib/format';
-import { Button, ButtonRow, Card, KeyValueRow, StatusPill, T, tokens } from '@/ui';
+import { Button, ButtonRow, Card, ConfirmDialog, KeyValueRow, StatusPill, T, tokens } from '@/ui';
 import { EditCountSheet } from './EditCountSheet';
 
 export function BatchCard({
@@ -59,35 +59,11 @@ export function BatchCard({
         </View>
         <KeyValueRow label="From bill" value={from} />
         <KeyValueRow label="Expires" value={expiresIn(daysUntilExpiry(batch.expiry, today))} />
-        {confirming ? (
-          <>
-            <T size={14}>{`Mark batch ${batch.batchNo} as returned?`}</T>
-            <ButtonRow>
-              <Button label="Cancel" variant="secondary" onPress={() => setConfirming(false)} />
-              <Button
-                label="Mark returned"
-                disabled={busy}
-                onPress={() =>
-                  run(async () => {
-                    await onReturned();
-                    setConfirming(false);
-                  })
-                }
-              />
-            </ButtonRow>
-          </>
-        ) : (
-          <ButtonRow>
-            <Button
-              label="Sold 1"
-              variant="secondary"
-              disabled={busy}
-              onPress={() => run(onSold)}
-            />
-            <Button label="Edit count" variant="secondary" onPress={() => setEditing(true)} />
-            <Button label="Returned" variant="secondary" onPress={() => setConfirming(true)} />
-          </ButtonRow>
-        )}
+        <ButtonRow>
+          <Button label="Sold 1" variant="secondary" disabled={busy} onPress={() => run(onSold)} />
+          <Button label="Edit count" variant="secondary" onPress={() => setEditing(true)} />
+          <Button label="Returned" variant="secondary" onPress={() => setConfirming(true)} />
+        </ButtonRow>
       </View>
       {editing && (
         <EditCountSheet
@@ -98,6 +74,19 @@ export function BatchCard({
             setEditing(false);
             void run(() => onSetCount(q));
           }}
+        />
+      )}
+      {confirming && (
+        <ConfirmDialog
+          title={`Mark batch ${batch.batchNo} as returned?`}
+          message="It leaves the stock list."
+          confirmLabel="Mark returned"
+          destructive
+          onConfirm={() => {
+            setConfirming(false);
+            void run(onReturned);
+          }}
+          onCancel={() => setConfirming(false)}
         />
       )}
     </Card>

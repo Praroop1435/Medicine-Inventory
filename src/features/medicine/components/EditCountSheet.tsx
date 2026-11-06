@@ -1,8 +1,7 @@
 import { useState } from 'react';
-import { Modal, Pressable, View } from 'react-native';
-import { Button, ButtonRow, Stepper, T, tokens } from '@/ui';
+import { Button, ButtonRow, ConfirmDialog, Sheet, Stepper, T } from '@/ui';
 
-/** Bottom sheet: set the shelf count for one batch. */
+/** Bottom sheet: set the shelf count for one batch. A count of 0 closes the batch, so it asks first. */
 export function EditCountSheet({
   batchNo,
   qty,
@@ -15,29 +14,25 @@ export function EditCountSheet({
   onClose: () => void;
 }) {
   const [value, setValue] = useState(qty);
+  const [confirming, setConfirming] = useState(false);
   return (
-    <Modal visible transparent animationType="slide" onRequestClose={onClose}>
-      <Pressable
-        accessibilityLabel="Close"
-        onPress={onClose}
-        style={{ flex: 1, backgroundColor: tokens.color.scrim }}
-      />
-      <View
-        style={{
-          backgroundColor: tokens.color.surface,
-          borderTopLeftRadius: tokens.radius.card,
-          borderTopRightRadius: tokens.radius.card,
-          padding: tokens.margin,
-          gap: tokens.space[3],
-        }}
-      >
-        <T size={16} weight="medium">{`Edit count · batch ${batchNo}`}</T>
-        <Stepper value={value} onChange={setValue} min={0} />
-        <ButtonRow>
-          <Button label="Cancel" variant="secondary" onPress={onClose} />
-          <Button label="Save" onPress={() => onSave(value)} />
-        </ButtonRow>
-      </View>
-    </Modal>
+    <Sheet onClose={onClose}>
+      <T size={16} weight="medium">{`Edit count · batch ${batchNo}`}</T>
+      <Stepper value={value} onChange={setValue} min={0} />
+      <ButtonRow>
+        <Button label="Cancel" variant="secondary" onPress={onClose} />
+        <Button label="Save" onPress={() => (value === 0 ? setConfirming(true) : onSave(value))} />
+      </ButtonRow>
+      {confirming && (
+        <ConfirmDialog
+          title="Save count of 0?"
+          message={`This closes batch ${batchNo}.`}
+          confirmLabel="Close batch"
+          destructive
+          onConfirm={() => onSave(0)}
+          onCancel={() => setConfirming(false)}
+        />
+      )}
+    </Sheet>
   );
 }

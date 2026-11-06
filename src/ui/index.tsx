@@ -8,6 +8,8 @@ export { StatusPill } from './StatusPill';
 export { CountStrip } from './CountStrip';
 export { Button } from './Button';
 export { ButtonRow } from './ButtonRow';
+export { ConfirmDialog } from './ConfirmDialog';
+export { Sheet } from './Sheet';
 export { Stepper } from './Stepper';
 export { SearchField } from './SearchField';
 export { Field } from './Field';

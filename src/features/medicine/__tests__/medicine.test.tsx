@@ -1,5 +1,5 @@
 import { router } from 'expo-router';
-import { fireEvent, renderRouter, screen } from 'expo-router/testing-library';
+import { act, fireEvent, renderRouter, screen, within } from 'expo-router/testing-library';
 import { createMemoryRepos } from '@/data/memory/createMemoryRepos';
 import type { Repos } from '@/data/repositories';
 import { emptyDraft } from '@/domain/draft';
@@ -130,11 +130,32 @@ describe('medicine screen', () => {
     expect(liveQty(repos, shopId)).toEqual({ B1: 2, H2: 4 });
   });
 
+  it('Edit count to 0 asks first: Cancel keeps the count, Close batch closes it', async () => {
+    const { repos, shopId } = await open();
+    await fireEvent.press(screen.getAllByRole('button', { name: 'Edit count' })[0]);
+    await fireEvent.press(screen.getByRole('button', { name: 'Decrease' }));
+    await fireEvent.press(screen.getByRole('button', { name: 'Decrease' }));
+    await fireEvent.press(screen.getByRole('button', { name: 'Save' }));
+    expect(screen.getByText('This closes batch B1.')).toBeOnTheScreen();
+    await fireEvent.press(
+      within(screen.getByTestId('confirm-dialog')).getByRole('button', { name: 'Cancel' }),
+    );
+    expect(screen.queryByTestId('confirm-dialog')).toBeNull();
+    expect(liveQty(repos, shopId)).toEqual({ B1: 2, H2: 3 });
+    await fireEvent.press(screen.getByRole('button', { name: 'Save' }));
+    await fireEvent.press(screen.getByRole('button', { name: 'Close batch' }));
+    await act(async () => {});
+    expect(liveQty(repos, shopId)).toEqual({ H2: 3 });
+    expect(screen.queryByText('Batch B1 · 2 cartons')).toBeNull();
+  });
+
   it('Returned asks first, then removes the card', async () => {
     const { repos, shopId } = await open();
     await fireEvent.press(screen.getAllByRole('button', { name: 'Returned' })[0]);
-    expect(screen.getByText('Mark batch B1 as returned?')).toBeOnTheScreen();
+    expect(screen.getByTestId('confirm-dialog')).toBeOnTheScreen();
+    expect(screen.getByRole('header', { name: 'Mark batch B1 as returned?' })).toBeOnTheScreen();
     await fireEvent.press(screen.getByRole('button', { name: 'Cancel' }));
+    expect(screen.queryByTestId('confirm-dialog')).toBeNull();
     expect(liveQty(repos, shopId)).toEqual({ B1: 2, H2: 3 });
     await fireEvent.press(screen.getAllByRole('button', { name: 'Returned' })[0]);
     await fireEvent.press(screen.getByRole('button', { name: 'Mark returned' }));
