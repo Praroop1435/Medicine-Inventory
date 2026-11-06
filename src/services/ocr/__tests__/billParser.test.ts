@@ -8,6 +8,7 @@ import {
   realBillLines,
   rotated,
 } from '../__fixtures__/real-bill-swastik';
+import { realBillMlkitDump } from '../__fixtures__/real-bill-mlkit-dump';
 
 const lines: OcrLine[] = readFileSync(
   join(__dirname, '../__fixtures__/bill-raj-pharma.txt'),
@@ -307,6 +308,51 @@ describe('real distributor bill (Swastik layout)', () => {
   it('gives identical output for a skewed, sideways or upside-down photo', () => {
     for (const deg of [3, -3, 7, -7, 20, -20, 35, -35, 90, 180, 270])
       expect(strip(parseBillText(rotated(realBillLines, deg)))).toEqual(strip(real));
+  });
+});
+
+describe('real ML Kit dump of the Swastik bill photo', () => {
+  const r = parseBillText(realBillMlkitDump);
+
+  it('reads the header', () => {
+    expect(r.header).toEqual({ supplier: 'SWASTIKAGENCIES', billNo: '2185', billDate: '02/11/26' });
+  });
+
+  // As printed on the photo. Rows drift more than a row pitch across the sideways, skewed photo;
+  // OCR merges pack into name ("1*30MLCLAVAM") and reads table rules as I/l/| ("I26490871i").
+  it('parses the 9 medicine rows', () => {
+    const ym = (year: number, month: number) => ({ year, month });
+    expect(
+      r.drafts.map((d) => [d.medicineName, d.batchNo, d.expiry, d.qty, d.companyName]),
+    ).toEqual([
+      ['MOROFER SYP', 'VHL2606003', ym(2027, 11), 40, 'MORAL PH'],
+      ['CLAVAM BID DRY SYP', '26442275', ym(2028, 5), 36, 'ALKEM MA'],
+      ['CLAVAM BID DRY SYP', '26441338', ym(2028, 3), 18, 'ALKEM MA'],
+      ['CLAVAM BID DRY SYP', '26443648', ym(2028, 8), 18, 'ALKEM MA'],
+      ['CLAVAM DRY SYP', '26442497', ym(2028, 5), 36, 'ALKEM MA'],
+      ['CLAVAM 625 TAB', '26441959', ym(2027, 10), 24, 'ALKEM PL'],
+      ['SUMO ACE TAB', '26230007', ym(2028, 4), 20, 'ALKEM AL'],
+      ['NOWORM SUSP', '26490871', ym(2028, 7), 25, 'ALKEM NE'],
+      ['SWICH 50MG DRY SYP', '26461024', ym(2027, 11), 20, 'ALKEM NE'],
+    ]);
+  });
+
+  it('flags expiry, batch and company on every row', () => {
+    for (const d of r.drafts) expect(d.uncertain).toEqual(['expiry', 'batchNo', 'companyName']);
+  });
+
+  it('keeps month-name expiries and splits a merged pack off the name', () => {
+    const row = (top: number, ...cells: [number, string][]) =>
+      cells.map(([left, text]) => ({ text, top, left, width: text.length * 10, height: 20 }));
+    const { drafts } = parseBillText([
+      ...row(0, [0, 'Product'], [300, 'Batch'], [400, 'Exp'], [500, 'Qty']),
+      ...row(40, [0, '1*10CROCIN'], [300, 'B12'], [400, 'OCT/27'], [500, '5']),
+      ...row(80, [0, 'DOLO'], [300, 'B13'], [400, 'SEP/28'], [500, '6']),
+    ]);
+    expect(drafts.map((d) => [d.medicineName, d.packInfo, d.expiry])).toEqual([
+      ['CROCIN', '1*10', { year: 2027, month: 10 }],
+      ['DOLO', undefined, { year: 2028, month: 9 }],
+    ]);
   });
 });
 

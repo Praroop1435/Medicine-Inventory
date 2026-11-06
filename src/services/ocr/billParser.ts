@@ -18,16 +18,25 @@ export function qtyFromToken(t: string): number | null {
 
 const median = (xs: number[]) => [...xs].sort((a, b) => a - b)[Math.floor(xs.length / 2)];
 
+/**
+ * Rows left to right: each word joins the row whose rightmost word is vertically nearest, so a
+ * row can drift with a skewed or curled photo (a real bill drifts more than a row pitch).
+ */
 function toRows(lines: OcrLine[]): OcrLine[][] {
   const heights = lines.flatMap((l) => (l.height ? [l.height] : []));
-  const tol = heights.length ? median(heights) / 2 : 8;
+  const tol = heights.length ? median(heights) * 0.75 : 8;
+  const mid = (l: OcrLine) => l.top + (l.height ?? 0) / 2;
   const rows: OcrLine[][] = [];
-  for (const l of [...lines].sort((a, b) => a.top - b.top)) {
-    const row = rows.find((r) => Math.abs(r[0].top - l.top) <= tol);
-    if (row) row.push(l);
+  for (const l of [...lines].sort((a, b) => a.left - b.left || a.top - b.top)) {
+    let best: OcrLine[] | undefined;
+    for (const r of rows) {
+      const d = Math.abs(mid(r[r.length - 1]) - mid(l));
+      if (d <= tol && (!best || d < Math.abs(mid(best[best.length - 1]) - mid(l)))) best = r;
+    }
+    if (best) best.push(l);
     else rows.push([l]);
   }
-  return rows.map((r) => r.sort((a, b) => a.left - b.left));
+  return rows.sort((a, b) => a[0].top - b[0].top);
 }
 
 const isBatch = (t: string) =>
@@ -115,6 +124,16 @@ function toCells(row: OcrLine[], heads: Head[], ch: number): OcrLine[][] {
   return cells;
 }
 
+// A merged "1*30MLCLAVAM": the pack column bled into the product cell.
+const PACK_PREFIX = /^\d+[*x]\d+(ML|M|GM|G)?(?=[A-Z])/i;
+// Table rules read as "|", "I" or "l" stick to the cell next to them ("I26490871i", "lo7/28").
+const trim = (t: string) => t.replace(/^[^A-Za-z0-9]+|[^A-Za-z0-9]+$/g, '');
+const cleanBatch = (t: string) => trim(t).replace(/^[Iil]?(\d{4,})[Iil]?$/, '$1');
+/** Expiry, falling back to reading O as 0 and S as 5 ("0S/28") after month names had their go. */
+const readExpiry = (t: string) =>
+  parseExpiry(t) ??
+  parseExpiry(/\d{1,2}[/-]\d{2,4}/.exec(t.replace(/o/gi, '0').replace(/s/gi, '5'))?.[0] ?? '');
+
 /** One table row read column by column: each cell goes to the header label it overlaps most. */
 function parseColumnRow(row: OcrLine[], heads: Head[], ch: number): DraftBatch | null {
   const cells = new Map<string, string[]>();
@@ -126,13 +145,17 @@ function parseColumnRow(row: OcrLine[], heads: Head[], ch: number): DraftBatch |
     cells.set(key, [...(cells.get(key) ?? []), ...c.flatMap((w) => w.text.trim().split(/\s+/))]);
   }
   const cell = (...keys: string[]) => keys.flatMap((k) => cells.get(k) ?? []);
-  const batch = cell('batch').find((t) => /^[A-Za-z0-9-]+$/.test(t) && /\d/.test(t));
-  const exp = cell('exp', 'expiry').find((t) => parseExpiry(t) || EXPIRY_SHAPED.test(t));
+  const batch = cell('batch')
+    .map(cleanBatch)
+    .find((t) => /^[A-Za-z0-9-]+$/.test(t) && /\d/.test(t));
+  const exp = cell('exp', 'expiry').find((t) => readExpiry(t) || EXPIRY_SHAPED.test(t));
   if (!batch && !exp) return null;
   const d = emptyDraft('scan');
-  d.medicineName = cell('product', 'item').join(' ').replace(/\.+$/, '');
+  const name = cell('product', 'item').join(' ');
+  const packPrefix = PACK_PREFIX.exec(name)?.[0];
+  d.medicineName = name.replace(PACK_PREFIX, '').replace(/[.,]+$/, '');
   d.batchNo = batch?.toUpperCase() ?? '';
-  d.expiry = exp ? parseExpiry(exp) : null;
+  d.expiry = exp ? readExpiry(exp) : null;
   const qt = cell('qty');
   const ft = cell('free');
   const joined = qt.join('');
@@ -141,7 +164,10 @@ function parseColumnRow(row: OcrLine[], heads: Head[], ch: number): DraftBatch |
   const freeOk = !ft.length || (ft.length === 1 && /^\d+$/.test(ft[0]));
   d.qty = q === null ? null : q + (freeOk ? Number(ft[0] ?? 0) : 0);
   d.companyName = cell('mfg').join(' ');
-  const pack = cell('pack').find((t) => /\d/.test(t)); // skips handwritten tick marks
+  const pack =
+    cell('pack')
+      .map(trim)
+      .find((t) => /\d/.test(t)) ?? packPrefix; // skips tick marks
   if (pack) d.packInfo = pack;
   d.uncertain.push('expiry', 'batchNo');
   // MFG cells are truncated division codes ("ALKEM MA"): the user confirms or a match replaces it.
