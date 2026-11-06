@@ -38,8 +38,22 @@ const isBatch = (t: string) =>
   !STRENGTH.test(t) &&
   !PACK.test(t);
 
-function parseRow(tokens: string[], hasFree: boolean): DraftBatch | null {
-  const batchIdx = tokens.findIndex(isBatch);
+type Tok = { t: string; left: number };
+type Cols = { batch?: number; qty?: number; free?: number; tol: number };
+
+const under = (k: Tok, col: number | undefined, tol: number) =>
+  col !== undefined && Math.abs(k.left - col) <= tol;
+
+function parseRow(toks: Tok[], cols: Cols): DraftBatch | null {
+  const tokens = toks.map((k) => k.t);
+  const colBatch = toks.findIndex(
+    (k) =>
+      under(k, cols.batch, cols.tol) &&
+      /^[A-Za-z0-9-]+$/.test(k.t) &&
+      /\d/.test(k.t) &&
+      !parseExpiry(k.t),
+  );
+  const batchIdx = colBatch >= 0 ? colBatch : tokens.findIndex(isBatch);
   const expIdx = tokens.findIndex((t) => parseExpiry(t) || EXPIRY_SHAPED.test(t));
   if (batchIdx < 0 && expIdx < 0) return null;
   const d = emptyDraft('scan');
@@ -50,13 +64,30 @@ function parseRow(tokens: string[], hasFree: boolean): DraftBatch | null {
     .join(' ');
   d.batchNo = batchIdx >= 0 ? tokens[batchIdx].toUpperCase() : '';
   d.expiry = expIdx >= 0 ? parseExpiry(tokens[expIdx]) : null;
-  const nums = tokens.slice(Math.max(expIdx, batchIdx) + 1).filter((t) => qtyFromToken(t) !== null);
-  if (nums.length)
-    d.qty = (qtyFromToken(nums[0]) ?? 0) + (hasFree && nums[1] ? (qtyFromToken(nums[1]) ?? 0) : 0);
+
+  // qty: never fall back to a rate/MRP integer. Columns decide when headers were found;
+  // otherwise the token right after the expiry is the qty, and several integers is ambiguous.
+  const start = Math.max(expIdx, batchIdx) + 1;
+  const after = toks.slice(start);
+  const ints = after.filter((k) => qtyFromToken(k.t) !== null);
+  let ambiguous = false;
+  let q: number | null;
+  if (cols.qty !== undefined) {
+    const k = after.find((x) => under(x, cols.qty, cols.tol));
+    q = k ? qtyFromToken(k.t) : null;
+  } else {
+    q = after[0] ? qtyFromToken(after[0].t) : null;
+    ambiguous = q !== null && ints.length > 1 && !after[0].t.includes('+');
+  }
+  if (q !== null && cols.free !== undefined) {
+    const f = after.find((x) => under(x, cols.free, cols.tol) && /^\d+$/.test(x.t));
+    q += f ? Number(f.t) : 0;
+  }
+  d.qty = q;
+  // ML Kit gives no confidence: expiry and batch are always for the user to confirm.
+  d.uncertain.push('expiry', 'batchNo');
   if (!d.medicineName) d.uncertain.push('medicineName');
-  if (!d.batchNo) d.uncertain.push('batchNo');
-  if (!d.expiry) d.uncertain.push('expiry');
-  if (d.qty === null) d.uncertain.push('qty');
+  if (d.qty === null || ambiguous) d.uncertain.push('qty');
   return d;
 }
 
@@ -75,11 +106,25 @@ export function parseBillText(lines: OcrLine[]): {
   const date = texts.find((t, i) => tops[i] <= cutoff && DATE.test(t));
   if (date) header.billDate = DATE.exec(date)![0];
 
-  const hasFree = lines.some((l) => /^free$/i.test(l.text.trim()));
+  const heights = lines.flatMap((l) => (l.height ? [l.height] : []));
+  const tol = heights.length ? median(heights) * 1.5 : 25;
+  const colOf = (re: RegExp) => lines.find((l) => re.test(l.text.trim()))?.left;
+  const cols: Cols = {
+    batch: colOf(/^batch\b/i),
+    qty: colOf(/^qty\.?$/i),
+    free: colOf(/^free$/i),
+    tol,
+  };
   const drafts: DraftBatch[] = [];
   texts.forEach((text, i) => {
     if (i === 0 || SKIP_ROW.test(text) || HEADER_ROW.test(text)) return;
-    const d = parseRow(text.split(/\s+/), hasFree);
+    const toks = rows[i].flatMap((l) =>
+      l.text
+        .trim()
+        .split(/\s+/)
+        .map((t) => ({ t, left: l.left })),
+    );
+    const d = parseRow(toks, cols);
     if (d) drafts.push(d);
   });
   return { header, drafts };

@@ -11,31 +11,45 @@ import { useIntake } from '../IntakeContext';
 
 const NOTHING_READ = "Couldn't read any medicines. Try again with better light, or type them.";
 
+const FAILED = "Couldn't read the photo. Try again.";
+
 /** Photograph or pick a bill, read it on-device, then review. The photo is never uploaded. */
 export function ScanScreen({ engine = mlkitOcrEngine }: { engine?: OcrEngine }) {
   const { setDrafts } = useIntake();
   const [permission, requestPermission] = useCameraPermissions();
   const camera = useRef<CameraView>(null);
-  const [phase, setPhase] = useState<'ready' | 'reading' | 'empty'>('ready');
+  const busy = useRef(false);
+  const [phase, setPhase] = useState<'ready' | 'reading' | 'empty' | 'failed'>('ready');
 
   const read = async (uri: string | undefined) => {
     if (!uri) return setPhase('ready');
     setPhase('reading');
+    let parsed: ReturnType<typeof parseBillText>;
     try {
-      const { header, drafts } = parseBillText(await engine.recognize(uri));
-      if (!drafts.length) return setPhase('empty');
-      setDrafts(drafts, { supplier: '', billNo: '', billDate: '', ...header });
-      setPhase('ready');
-      router.push('/intake/review');
+      parsed = parseBillText(await engine.recognize(uri));
     } catch {
-      setPhase('empty');
+      return setPhase('failed');
+    }
+    if (!parsed.drafts.length) return setPhase('empty');
+    setDrafts(parsed.drafts, { supplier: '', billNo: '', billDate: '', ...parsed.header });
+    setPhase('ready');
+    router.push('/intake/review');
+  };
+  // One capture/pick at a time: a second tap while the camera, picker or OCR is busy is ignored.
+  const once = (getUri: () => Promise<string | undefined>) => async () => {
+    if (busy.current) return;
+    busy.current = true;
+    try {
+      await read(await getUri());
+    } finally {
+      busy.current = false;
     }
   };
-  const capture = async () => read((await camera.current?.takePictureAsync({ quality: 0.8 }))?.uri);
-  const pick = async () => {
+  const capture = once(async () => (await camera.current?.takePictureAsync({ quality: 0.8 }))?.uri);
+  const pick = once(async () => {
     const r = await launchImageLibraryAsync({ mediaTypes: ['images'], quality: 0.8 });
-    await read(r.canceled ? undefined : r.assets[0]?.uri);
-  };
+    return r.canceled ? undefined : r.assets[0]?.uri;
+  });
 
   if (phase === 'reading')
     return (
@@ -43,11 +57,11 @@ export function ScanScreen({ engine = mlkitOcrEngine }: { engine?: OcrEngine }) 
         <T color={tokens.color.muted}>Reading bill…</T>
       </Screen>
     );
-  if (phase === 'empty')
+  if (phase === 'empty' || phase === 'failed')
     return (
       <Screen back="Back" title="Scan bill">
         <View style={{ gap: tokens.space[3] }}>
-          <T color={tokens.color.muted}>{NOTHING_READ}</T>
+          <T color={tokens.color.muted}>{phase === 'failed' ? FAILED : NOTHING_READ}</T>
           <ButtonRow>
             <Button label="Retake" variant="secondary" onPress={() => setPhase('ready')} />
             <Button label="Type instead" onPress={() => router.replace('/intake/manual')} />
@@ -68,7 +82,7 @@ export function ScanScreen({ engine = mlkitOcrEngine }: { engine?: OcrEngine }) 
               style={{
                 position: 'absolute',
                 inset: tokens.space[4],
-                borderWidth: 2,
+                borderWidth: tokens.stroke,
                 borderColor: tokens.color.surface,
                 borderRadius: tokens.radius.control,
               }}

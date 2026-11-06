@@ -48,8 +48,13 @@ const GOOD: OcrLine[] = [
   ...row(130, 'Dolo', 'DL1', '03/28', '5'),
 ];
 
-async function start(lines: OcrLine[]) {
-  const engine: OcrEngine = { recognize: async () => lines };
+async function start(lines: OcrLine[] | Error) {
+  const engine: OcrEngine = {
+    recognize: async () => {
+      if (lines instanceof Error) throw lines;
+      return lines;
+    },
+  };
   const repos = createMemoryRepos(() => 1);
   const { shopId, deviceId } = await repos.shop.createShop('Anand Medicals', 'Ravi');
   mockStore.set('session', JSON.stringify({ shopId, deviceId, displayName: 'Ravi' }));
@@ -104,5 +109,11 @@ describe('scan screen', () => {
     expect(await screen.findByText(/Camera permission is off/)).toBeOnTheScreen();
     await fireEvent.press(screen.getByRole('button', { name: 'Pick from gallery' }));
     expect(await screen.findByText(/Review stub: 2/)).toBeOnTheScreen();
+  });
+
+  it('distinguishes an engine failure from zero rows', async () => {
+    await start(new Error('boom'));
+    await fireEvent.press(await screen.findByRole('button', { name: 'Capture' }));
+    expect(await screen.findByText("Couldn't read the photo. Try again.")).toBeOnTheScreen();
   });
 });

@@ -50,7 +50,7 @@ describe('parseBillText', () => {
       expiry: { year: 2027, month: 8 },
       qty: 20,
       source: 'scan',
-      uncertain: [],
+      uncertain: ['expiry', 'batchNo'],
     });
     expect(drafts[1]).toMatchObject({
       batchNo: 'AZ88',
@@ -64,16 +64,143 @@ describe('parseBillText', () => {
       batchNo: 'PN7721',
       expiry: null,
       qty: 6,
-      uncertain: ['expiry'],
+      uncertain: ['expiry', 'batchNo'],
     });
     expect(drafts[3]).toMatchObject({
       qty: null,
       expiry: { year: 2028, month: 3 },
-      uncertain: ['qty'],
+      uncertain: ['expiry', 'batchNo', 'qty'],
     });
   });
 
   it('returns nothing for an empty photo', () => {
     expect(parseBillText([])).toEqual({ header: {}, drafts: [] });
+  });
+});
+
+describe('column rules', () => {
+  const at = (top: number, cells: [number, string][]): OcrLine[] =>
+    cells.map(([left, text]) => ({ top, left, text }));
+  const head = at(10, [[0, 'SHOP']]);
+  const cols = at(40, [
+    [0, 'Product'],
+    [100, 'Batch'],
+    [200, 'Exp'],
+    [300, 'Qty'],
+    [400, 'Free'],
+    [500, 'Rate'],
+  ]);
+  const one = (lines: OcrLine[]) => parseBillText([...head, ...lines]).drafts[0];
+
+  it('every scan row flags expiry and batchNo', () => {
+    for (const d of parseBillText(lines).drafts)
+      expect(d.uncertain).toEqual(expect.arrayContaining(['expiry', 'batchNo']));
+  });
+
+  it('integer rate with blank free does not inflate qty', () => {
+    const d = one([
+      ...cols,
+      ...at(70, [
+        [0, 'Crocin'],
+        [100, 'A1'],
+        [200, '08/27'],
+        [300, '10'],
+        [500, '98'],
+      ]),
+    ]);
+    expect(d.qty).toBe(10);
+    expect(d.uncertain).not.toContain('qty');
+  });
+
+  it('unreadable qty with integer rate is null and flagged, with or without headers', () => {
+    const row = at(70, [
+      [0, 'Crocin'],
+      [100, 'A1'],
+      [200, '08/27'],
+      [300, 'x'],
+      [500, '98'],
+    ]);
+    for (const lines of [[...cols, ...row], row]) {
+      const d = one(lines);
+      expect(d.qty).toBeNull();
+      expect(d.uncertain).toContain('qty');
+    }
+  });
+
+  it('takes free only from the Free column or an a+b token', () => {
+    expect(
+      one([
+        ...cols,
+        ...at(70, [
+          [0, 'X'],
+          [100, 'A1'],
+          [200, '08/27'],
+          [300, '5'],
+          [400, '1'],
+          [500, '98'],
+        ]),
+      ]).qty,
+    ).toBe(6);
+    expect(
+      one([
+        ...cols,
+        ...at(70, [
+          [0, 'X'],
+          [100, 'A1'],
+          [200, '08/27'],
+          [300, '10+1'],
+          [500, '98'],
+        ]),
+      ]).qty,
+    ).toBe(11);
+  });
+
+  it('garbled/missing Free header: free not added, ambiguous qty flagged', () => {
+    const garbled = at(40, [
+      [0, 'Product'],
+      [100, 'Batch'],
+      [200, 'Exp'],
+      [300, 'Qty'],
+      [400, 'Fr3e'],
+    ]);
+    const d = one([
+      ...garbled,
+      ...at(70, [
+        [0, 'X'],
+        [100, 'A1'],
+        [200, '08/27'],
+        [300, '5'],
+        [400, '1'],
+      ]),
+    ]);
+    expect(d.qty).toBe(5);
+    const noHeaders = one(
+      at(70, [
+        [0, 'X'],
+        [100, 'A1'],
+        [200, '08/27'],
+        [300, '5'],
+        [400, '1'],
+        [500, '98'],
+      ]),
+    );
+    expect(noHeaders.qty).toBe(5);
+    expect(noHeaders.uncertain).toContain('qty');
+  });
+
+  it('uses the Batch column over a batch-like name word', () => {
+    const d = one([
+      ...cols,
+      ...at(70, [
+        [0, 'Vitamin'],
+        [40, 'D3'],
+        [100, 'ZX9'],
+        [200, '08/27'],
+        [300, '2'],
+      ]),
+    ]);
+    expect(d.batchNo).toBe('ZX9');
+    expect(d.medicineName).toBe('Vitamin D3');
+    expect(d.uncertain).toContain('batchNo');
   });
 });

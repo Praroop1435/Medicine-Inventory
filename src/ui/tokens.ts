@@ -32,5 +32,6 @@ export const tokens = {
   margin: 16,
   fab: 52,
   qr: 220,
+  stroke: 2,
 } as const;
 export type Tone = 'expired' | 'soon' | 'ink';
