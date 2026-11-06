@@ -19,10 +19,14 @@ export async function readPdfBill(
   const { pageCount, images } = await renderer.renderPages(uri, MAX_PDF_PAGES);
   const lines: OcrLine[] = [];
   let offset = 0;
-  for (const [i, img] of images.entries()) {
-    onProgress(i + 1, images.length);
-    lines.push(...(await ocr.recognize(img.uri)).map((l) => shift(l, offset)));
-    offset += img.height;
+  try {
+    for (const [i, img] of images.entries()) {
+      onProgress(i + 1, images.length);
+      lines.push(...(await ocr.recognize(img.uri)).map((l) => shift(l, offset)));
+      offset += img.height;
+    }
+  } finally {
+    renderer.cleanup?.(images.map((i) => i.uri));
   }
   return { lines, truncated: pageCount > MAX_PDF_PAGES };
 }

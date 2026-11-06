@@ -39,7 +39,7 @@ export function ScanScreen({
   const read = async (uri: string | undefined, pdf = false) => {
     if (!uri) return setPhase('ready');
     setIsPdf(pdf);
-    setProgress('Reading bill…');
+    setProgress(pdf ? 'Preparing pages…' : 'Reading bill…');
     setPhase('reading');
     let parsed: ReturnType<typeof parseBillText>;
     let truncated = false;

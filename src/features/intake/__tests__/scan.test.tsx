@@ -59,11 +59,11 @@ const PAGES: Record<string, OcrLine[]> = {
   ],
   'page1.jpg': row(30, 'Dolo', 'DL1', '03/28', '5'),
 };
-const pdfRenderer = (fail = false): PdfRenderer => ({
+const pdfRenderer = (fail = false, pageCount = 2): PdfRenderer => ({
   renderPages: async () => {
     if (fail) throw new Error('bad pdf');
     return {
-      pageCount: 2,
+      pageCount,
       images: ['page0.jpg', 'page1.jpg'].map((uri) => ({ uri, width: 600, height: 1000 })),
     };
   },
@@ -153,6 +153,14 @@ describe('scan screen', () => {
       expect(getDocumentAsync).toHaveBeenCalledWith(
         expect.objectContaining({ type: 'application/pdf' }),
       );
+    });
+
+    it('tells the user when a PDF has more than 10 pages', async () => {
+      pick();
+      await start(GOOD, pdfRenderer(false, 11));
+      await fireEvent.press(await screen.findByRole('button', { name: 'PDF file' }));
+      expect(await screen.findByText(/Review stub: 2/)).toBeOnTheScreen();
+      expect(await screen.findByText('Only the first 10 pages were read.')).toBeOnTheScreen();
     });
 
     it("says so when the PDF can't be opened", async () => {

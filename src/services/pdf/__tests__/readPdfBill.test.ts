@@ -45,4 +45,18 @@ describe('readPdfBill', () => {
     expect(lines).toHaveLength(10);
     expect(truncated).toBe(true);
   });
+
+  it('deletes the rendered images after reading, even when OCR fails', async () => {
+    const cleanup = jest.fn();
+    const r = { ...renderer(2), cleanup };
+    await readPdfBill('f.pdf', r, ocr);
+    expect(cleanup).toHaveBeenLastCalledWith(['p0', 'p1']);
+    const bad: OcrEngine = {
+      recognize: async () => {
+        throw new Error('boom');
+      },
+    };
+    await expect(readPdfBill('f.pdf', r, bad)).rejects.toThrow('boom');
+    expect(cleanup).toHaveBeenCalledTimes(2);
+  });
 });
