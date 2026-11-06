@@ -48,4 +48,6 @@ export type StockEvent = {
   delta: number;
   deviceId: string;
   at: number;
+  /** On `added` events: the bill that brought the stock in, if any. */
+  billId?: string | null;
 };

@@ -85,7 +85,10 @@ export function planIntake(
       batches.push(b);
     }
     touched.set(b.id, b);
-    plan.events.push(eventFor(b, 'added', d.qty, deviceId, at));
+    plan.events.push({
+      ...eventFor(b, 'added', d.qty, deviceId, at),
+      billId: plan.bill?.id ?? null,
+    });
   }
   plan.batches = [...touched.values()];
   return plan;

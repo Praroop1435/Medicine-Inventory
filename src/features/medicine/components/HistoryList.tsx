@@ -1,4 +1,4 @@
-import type { Batch, Bill, Device, StockEvent, Unit } from '@/domain/types';
+import type { Bill, Device, StockEvent, Unit } from '@/domain/types';
 import { dayMonth, pluralUnit } from '@/lib/format';
 import { Card, ListRow } from '@/ui';
 
@@ -23,21 +23,18 @@ function describe(e: StockEvent, unit: Unit, bill: Bill | undefined): string {
 export function HistoryList({
   events,
   unit,
-  batches,
   bills,
   devices,
 }: {
   events: StockEvent[];
   unit: Unit;
-  batches: Batch[];
-  bills: Bill[];
+  bills: Map<string, Bill>;
   devices: Device[];
 }) {
   return (
     <Card>
       {events.map((e) => {
-        const billId = batches.find((b) => b.id === e.batchId)?.billId;
-        const bill = bills.find((b) => b.id === billId);
+        const bill = e.billId ? bills.get(e.billId) : undefined;
         const who = devices.find((d) => d.id === e.deviceId)?.displayName ?? '';
         return (
           <ListRow

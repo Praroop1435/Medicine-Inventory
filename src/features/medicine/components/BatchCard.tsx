@@ -2,16 +2,9 @@ import { useState } from 'react';
 import { View } from 'react-native';
 import { batchStatus, daysUntilExpiry, formatExpiry } from '@/domain/expiry';
 import type { AlertDays, Batch, Bill, Unit } from '@/domain/types';
-import { dayMonth, pluralUnit } from '@/lib/format';
+import { dayMonth, expiresIn, pluralUnit } from '@/lib/format';
 import { Button, ButtonRow, Card, KeyValueRow, StatusPill, T, tokens } from '@/ui';
 import { EditCountSheet } from './EditCountSheet';
-
-function expiresIn(days: number): string {
-  if (days < 0) return `${-days} day${days === -1 ? '' : 's'} ago`;
-  if (days === 0) return 'today';
-  if (days < 60) return `in ${days} day${days === 1 ? '' : 's'}`;
-  return `in ${Math.round(days / 30)} months`;
-}
 
 export function BatchCard({
   batch,
@@ -28,17 +21,27 @@ export function BatchCard({
   bill: Bill | undefined;
   today: Date;
   alertDays: AlertDays;
-  onSold: () => void;
-  onSetCount: (qty: number) => void;
-  onReturned: () => void;
+  onSold: () => Promise<void>;
+  onSetCount: (qty: number) => Promise<void>;
+  onReturned: () => Promise<void>;
 }) {
   const [editing, setEditing] = useState(false);
   const [confirming, setConfirming] = useState(false);
+  const [busy, setBusy] = useState(false);
+  // Runs an async action with the buttons disabled; the screen shows any failure as a toast.
+  const run = async (f: () => Promise<void>) => {
+    setBusy(true);
+    try {
+      await f();
+    } finally {
+      setBusy(false);
+    }
+  };
   const from = !batch.billId
     ? 'Added by hand'
     : bill
       ? `${bill.supplier} · #${bill.billNo} · ${dayMonth(bill.billDate)}`
-      : '';
+      : '—';
   return (
     <Card>
       <View style={{ padding: tokens.space[4], gap: tokens.space[2] }}>
@@ -61,12 +64,26 @@ export function BatchCard({
             <T size={14}>{`Mark batch ${batch.batchNo} as returned?`}</T>
             <ButtonRow>
               <Button label="Cancel" variant="secondary" onPress={() => setConfirming(false)} />
-              <Button label="Mark returned" onPress={onReturned} />
+              <Button
+                label="Mark returned"
+                disabled={busy}
+                onPress={() =>
+                  run(async () => {
+                    await onReturned();
+                    setConfirming(false);
+                  })
+                }
+              />
             </ButtonRow>
           </>
         ) : (
           <ButtonRow>
-            <Button label="Sold 1" variant="secondary" onPress={onSold} />
+            <Button
+              label="Sold 1"
+              variant="secondary"
+              disabled={busy}
+              onPress={() => run(onSold)}
+            />
             <Button label="Edit count" variant="secondary" onPress={() => setEditing(true)} />
             <Button label="Returned" variant="secondary" onPress={() => setConfirming(true)} />
           </ButtonRow>
@@ -79,7 +96,7 @@ export function BatchCard({
           onClose={() => setEditing(false)}
           onSave={(q) => {
             setEditing(false);
-            onSetCount(q);
+            void run(() => onSetCount(q));
           }}
         />
       )}

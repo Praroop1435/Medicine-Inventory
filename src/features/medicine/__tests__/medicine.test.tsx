@@ -150,6 +150,24 @@ describe('medicine screen', () => {
     expect(screen.getAllByText('4 Nov · Ravi')).toHaveLength(2);
   });
 
+  it('keeps the bill on history after the batch is closed', async () => {
+    const { repos, shopId } = await open();
+    await fireEvent.press(screen.getAllByRole('button', { name: 'Returned' })[0]);
+    await fireEvent.press(screen.getByRole('button', { name: 'Mark returned' }));
+    await screen.findByText('Marked returned');
+    expect(screen.getByText('+2 cartons from bill #4471')).toBeOnTheScreen();
+    expect(liveQty(repos, shopId)).toEqual({ H2: 3 });
+  });
+
+  it('toasts the reason when an action fails and shows meta and category back label', async () => {
+    const { repos } = await open();
+    jest.spyOn(repos.inventory, 'sellOne').mockRejectedValue(new Error('No stock to sell'));
+    await fireEvent.press(screen.getAllByRole('button', { name: 'Sold 1' })[0]);
+    expect(await screen.findByText('No stock to sell')).toBeOnTheScreen();
+    expect(screen.getByText('Micro Labs · counted in cartons')).toBeOnTheScreen();
+    expect(screen.getByRole('button', { name: 'Back, Antibiotics' })).toBeOnTheScreen();
+  });
+
   it('Add batch opens manual intake for this medicine', async () => {
     const { medId } = await open();
     const push = jest.spyOn(router, 'push').mockImplementation(() => {});

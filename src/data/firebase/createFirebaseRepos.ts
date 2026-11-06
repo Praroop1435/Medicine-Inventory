@@ -253,7 +253,12 @@ export function createFirebaseRepos(opts: { onWriteError?: (e: Error) => void } 
           (id, d) => batchFromDoc(id, d as BatchDoc),
           cb,
         ),
-      watchBills: (shopId, cb) => list(col(shopId, 'bills'), withId<Bill>, cb),
+      watchBill: (shopId, billId, cb) =>
+        onSnapshot(
+          ref(shopId, 'bills', billId),
+          (s) => cb(s.exists() ? withId<Bill>(s.id, s.data() as DocumentData) : null),
+          onError,
+        ),
       watchMedicineEvents: (shopId, medicineId, n, cb) =>
         list(
           query(

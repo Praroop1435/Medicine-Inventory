@@ -44,7 +44,7 @@ export interface InventoryRepo {
     limit: number,
     cb: (e: StockEvent[]) => void,
   ): Unsub;
-  watchBills(shopId: string, cb: (b: Bill[]) => void): Unsub;
+  watchBill(shopId: string, billId: string, cb: (b: Bill | null) => void): Unsub;
   saveIntake(
     shopId: string,
     drafts: DraftBatch[],

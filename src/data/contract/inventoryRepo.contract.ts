@@ -53,16 +53,23 @@ export function runInventoryContract(make: () => Repos): void {
     expect(after.find((c) => c.id === cs[0].id)?.lastCheckedAt).toBe(123);
   });
 
-  it('watchBills returns saved bills', async () => {
+  it('watchBill returns one bill, null when unknown; added events carry billId', async () => {
     await save([draft({})], {
       supplier: 'S',
       billNo: '9',
       billDate: '2026-01-01',
       scannedBy: deviceId,
     });
-    const bills = last<Bill[]>((cb) => inv().watchBills(shopId, cb));
-    expect(bills).toHaveLength(1);
-    expect(bills[0]).toMatchObject({ id: batches()[0].billId, supplier: 'S', billNo: '9' });
+    const billId = batches()[0].billId as string;
+    expect(last<Bill | null>((cb) => inv().watchBill(shopId, billId, cb))).toMatchObject({
+      id: billId,
+      supplier: 'S',
+      billNo: '9',
+    });
+    expect(last<Bill | null>((cb) => inv().watchBill(shopId, 'nope', cb))).toBeNull();
+    expect(events(batches()[0].medicineId)[0]).toMatchObject({ type: 'added', billId });
+    await save([draft({ batchNo: 'B2' })]);
+    expect(events(batches()[0].medicineId)[0].billId ?? null).toBeNull();
   });
 
   it('seeds categories and defaults', () => {

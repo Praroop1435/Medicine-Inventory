@@ -15,3 +15,11 @@ export const dayMonth = (d: Date | string): string => {
       : [d.getMonth(), d.getDate()];
   return `${day} ${MON[m]}`;
 };
+
+/** "in 24 days", "in 9 months", "today", "3 days ago". */
+export function expiresIn(days: number): string {
+  if (days < 0) return `${-days} day${days === -1 ? '' : 's'} ago`;
+  if (days === 0) return 'today';
+  if (days < 60) return `in ${days} day${days === 1 ? '' : 's'}`;
+  return `in ${Math.round(days / 30)} months`;
+}

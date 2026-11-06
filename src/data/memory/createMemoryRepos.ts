@@ -145,7 +145,8 @@ export function createMemoryRepos(now: () => number = Date.now): Repos {
       watchMedicines: (shopId, cb) => watch(shopId, (s) => s.medicines, cb),
       watchLiveBatches: (shopId, cb) =>
         watch(shopId, (s) => s.batches.filter((b) => b.status === 'active'), cb),
-      watchBills: (shopId, cb) => watch(shopId, (s) => s.bills, cb),
+      watchBill: (shopId, billId, cb) =>
+        watch(shopId, (s) => s.bills.find((b) => b.id === billId) ?? null, cb),
       watchMedicineEvents: (shopId, medicineId, limit, cb) =>
         watch(
           shopId,
