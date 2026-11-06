@@ -4,6 +4,7 @@ import {
   ChevronRight,
   ChevronUp,
   CalendarCheck,
+  Camera,
   CircleCheck,
   Check,
   ClipboardCheck,
@@ -12,6 +13,7 @@ import {
   FileText,
   Folder,
   House,
+  Image,
   Keyboard,
   Mic,
   Package,
@@ -48,6 +50,8 @@ const icons = {
   sheet: FileSpreadsheet,
   calendar: CalendarCheck,
   'no-results': SearchX,
+  camera: Camera,
+  image: Image,
 } satisfies Record<string, LucideIcon>;
 
 export type IconName = keyof typeof icons;

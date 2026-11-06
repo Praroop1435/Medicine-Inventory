@@ -11,6 +11,8 @@ type Props = {
   onPressOut?: () => void;
   disabled?: boolean;
   full?: boolean;
+  /** Read by screen readers, e.g. why the button is disabled. */
+  accessibilityHint?: string;
 };
 
 export function Button({
@@ -21,12 +23,14 @@ export function Button({
   onPressOut,
   disabled,
   full,
+  accessibilityHint,
 }: Props) {
   const filled = variant === 'primary' || variant === 'danger';
   return (
     <Pressable
       accessibilityRole="button"
       accessibilityLabel={label}
+      accessibilityHint={accessibilityHint}
       accessibilityState={{ disabled: !!disabled }}
       disabled={disabled}
       onPress={onPress}

@@ -59,7 +59,8 @@ export function ListRow({
           </T>
         ) : null}
       </View>
-      {right}
+      {/* Centred: pills set alignSelf flex-start for their own column layouts. */}
+      {right ? <View style={{ alignSelf: 'center' }}>{right}</View> : null}
       {chevron ? <Icon name="chevron-right" color={tokens.color.muted} /> : null}
     </Pressable>
   );

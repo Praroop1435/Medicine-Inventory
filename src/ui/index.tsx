@@ -26,5 +26,6 @@ export { Icon } from './Icon';
 export { IconTile } from './IconTile';
 export { ActionTile } from './ActionTile';
 export { Logo } from './Logo';
+export { Banner } from './Banner';
 export type { IconName } from './Icon';
 export { T } from './Text';

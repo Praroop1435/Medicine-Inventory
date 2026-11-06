@@ -1,12 +1,13 @@
 import { useState, type ReactNode } from 'react';
 import { View } from 'react-native';
 import { draftIssues, type DraftBatch, type DraftField } from '@/domain/draft';
-import { formatExpiry, parseExpiry } from '@/domain/expiry';
+import { daysUntilExpiry, formatExpiry, parseExpiry } from '@/domain/expiry';
 import { pathLabel, walk } from '@/domain/tree';
 import { shopUnits } from '@/domain/types';
 import { useRepos } from '@/data/RepoContext';
 import { useSession } from '@/features/onboarding/SessionContext';
 import { useShop } from '@/features/shared/hooks/useShop';
+import { useToday } from '@/features/shared/hooks/useToday';
 import { useToast } from '@/features/shared/Toast';
 import { useInventory } from '@/features/shared/hooks/useInventory';
 import { CategoryEditor } from '@/features/stock/components/CategoryEditor';
@@ -19,7 +20,6 @@ import {
   Field,
   IconButton,
   KeyValueRow,
-  Pill,
   T,
   tokens,
 } from '@/ui';
@@ -43,6 +43,19 @@ export function parseQty(t: string): number | null {
   return m ? Number(m[1]) + Number(m[2] ?? 0) : null;
 }
 
+/**
+ * Typing on a number pad: digits become "MM/YY" (or MM/YYYY) with the slash added after the
+ * month. Anything with letters (e.g. "Nov 2026" from a scan) is left for parseExpiry.
+ */
+export function typeExpiry(next: string, prev: string): string {
+  if (!/^[\d/\s]*$/.test(next)) return next;
+  const d = next.replace(/\D/g, '').slice(0, 6);
+  if (d.length > 2) return `${d.slice(0, 2)}/${d.slice(2)}`;
+  return d.length === 2 && next.length > prev.length ? `${d}/` : d;
+}
+const mmYy = ({ year, month }: { year: number; month: number }) =>
+  `${String(month).padStart(2, '0')}/${String(year).slice(2)}`;
+
 type Props = {
   draft: DraftBatch;
   onChange: (patch: DraftPatch) => void;
@@ -55,7 +68,8 @@ type Props = {
 /** One intake row, shared by review and manual entry. Remount (key) when the draft is replaced. */
 export function ReviewCard({ draft: d, onChange, onConfirm, onRemove, flagMissing = true }: Props) {
   const { categories } = useInventory();
-  const [expiryText, setExpiryText] = useState(d.expiry ? formatExpiry(d.expiry) : '');
+  const [expiryText, setExpiryText] = useState(d.expiry ? mmYy(d.expiry) : '');
+  const today = useToday();
   const [qtyText, setQtyText] = useState(d.qty === null ? '' : String(d.qty));
   const [addingFolder, setAddingFolder] = useState(false);
   const [newUnit, setNewUnit] = useState<string | null>(null);
@@ -91,7 +105,13 @@ export function ReviewCard({ draft: d, onChange, onConfirm, onRemove, flagMissin
       ) : null}
     </View>
   );
-  const input = (f: DraftField, label: string, value: string, set: (t: string) => void) => {
+  const input = (
+    f: DraftField,
+    label: string,
+    value: string,
+    set: (t: string) => void,
+    extra?: Partial<Parameters<typeof Field>[0]>,
+  ) => {
     const msg = flag(f, value);
     return confirmable(
       f,
@@ -101,6 +121,7 @@ export function ReviewCard({ draft: d, onChange, onConfirm, onRemove, flagMissin
         onChangeText={set}
         uncertain={!!msg}
         uncertainLabel={msg}
+        {...extra}
       />,
     );
   };
@@ -109,7 +130,7 @@ export function ReviewCard({ draft: d, onChange, onConfirm, onRemove, flagMissin
       <T size={12} weight="medium" color={flag(f, '') ? tokens.color.soon : tokens.color.muted}>
         {label}
       </T>
-      <ChipRow>{chips}</ChipRow>
+      <ChipRow wrap>{chips}</ChipRow>
     </View>
   );
 
@@ -149,8 +170,14 @@ export function ReviewCard({ draft: d, onChange, onConfirm, onRemove, flagMissin
             </View>
           ) : (
             <>
-              {d.medicineName.trim() ? <Pill label="New" /> : null}
-              {input('companyName', 'Company', d.companyName, (t) => onChange({ companyName: t }))}
+              {d.medicineName.trim() ? (
+                <T size={12} color={tokens.color.muted}>
+                  New medicine · pick category and unit
+                </T>
+              ) : null}
+              {input('companyName', 'Company', d.companyName, (t) => onChange({ companyName: t }), {
+                placeholder: 'e.g. Alembic',
+              })}
               {picker('Category', 'categoryId', [
                 ...walk(categories).map((c) => (
                   <Chip
@@ -193,15 +220,40 @@ export function ReviewCard({ draft: d, onChange, onConfirm, onRemove, flagMissin
               ) : null}
             </>
           )}
-          {input('batchNo', 'Batch', d.batchNo, (t) => onChange({ batchNo: t }))}
-          {input('expiry', 'Expiry', expiryText, (t) => {
-            setExpiryText(t);
-            onChange({ expiry: parseExpiry(t) });
+          {input('batchNo', 'Batch', d.batchNo, (t) => onChange({ batchNo: t }), {
+            placeholder: 'As printed on the strip',
           })}
-          {input('qty', 'Quantity', qtyText, (t) => {
-            setQtyText(t);
-            onChange({ qty: parseQty(t) });
-          })}
+          {input(
+            'expiry',
+            'Expiry',
+            expiryText,
+            (t) => {
+              const next = typeExpiry(t, expiryText);
+              setExpiryText(next);
+              onChange({ expiry: parseExpiry(next) });
+            },
+            {
+              placeholder: 'MM/YY',
+              keyboardType: 'number-pad',
+              // How the text was read, so "11/26" visibly means Nov 2026.
+              hint: d.expiry
+                ? daysUntilExpiry(d.expiry, today) < 0
+                  ? `${formatExpiry(d.expiry)} · Already expired`
+                  : formatExpiry(d.expiry)
+                : undefined,
+              hintTone: d.expiry && daysUntilExpiry(d.expiry, today) < 0 ? 'expired' : 'muted',
+            },
+          )}
+          {input(
+            'qty',
+            'Quantity',
+            qtyText,
+            (t) => {
+              setQtyText(t);
+              onChange({ qty: parseQty(t) });
+            },
+            { keyboardType: 'number-pad', placeholder: 'e.g. 10' },
+          )}
         </View>
       </Card>
     </View>

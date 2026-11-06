@@ -1,8 +1,18 @@
 import type { ReactNode } from 'react';
-import { ScrollView } from 'react-native';
+import { ScrollView, View } from 'react-native';
 import { tokens } from './tokens';
 
-export function ChipRow({ children }: { children: ReactNode }) {
+/** Chips in one sideways-scrolling line; `wrap` puts every option on screen instead (pickers). */
+export function ChipRow({ children, wrap }: { children: ReactNode; wrap?: boolean }) {
+  if (wrap)
+    return (
+      <View
+        testID="chip-wrap"
+        style={{ flexDirection: 'row', flexWrap: 'wrap', gap: tokens.space[2] }}
+      >
+        {children}
+      </View>
+    );
   return (
     <ScrollView
       horizontal

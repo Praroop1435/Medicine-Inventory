@@ -172,6 +172,12 @@ describe('ListRow', () => {
     expect(screen.getByTestId('icon-tile')).toBeOnTheScreen();
     expect(screen.getByRole('button', { name: 'Balms, Never checked' })).toBeOnTheScreen();
   });
+  it('centres a right-hand pill vertically, like the chevron', async () => {
+    await render(
+      <ListRow title="Balms" right={<StatusPill status="soon" label="1 soon" />} chevron />,
+    );
+    expect(flat(screen.getByTestId('status-pill').parent!).alignSelf).toBe('center');
+  });
 });
 
 describe('EmptyState', () => {

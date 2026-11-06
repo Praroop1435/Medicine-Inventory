@@ -44,6 +44,10 @@ export const tokens = {
   actionTile: 96,
   logo: { hero: 120, mark: 28, glyph: 40 },
   indicator: 3,
+  // Toast sits this far above the bottom inset: clear of the tab bar (≈80) and docked footers (≈80).
+  toastOffset: 92,
+  shutter: 76,
+  mic: 96,
   handle: { width: 36, height: 4 },
   qr: 220,
   stroke: 2,

@@ -9,8 +9,12 @@ type Props = {
   uncertain?: boolean;
   uncertainLabel?: string;
   keyboardType?: KeyboardTypeOptions;
-  /** A muted line under the box, e.g. an example value. */
+  /** A line under the box: an example value, or how the input was read. */
   hint?: string;
+  /** `expired` paints the hint red, e.g. "Already expired". */
+  hintTone?: 'muted' | 'expired';
+  placeholder?: string;
+  maxLength?: number;
 };
 
 export function Field({
@@ -21,6 +25,9 @@ export function Field({
   uncertainLabel,
   keyboardType,
   hint,
+  hintTone = 'muted',
+  placeholder,
+  maxLength,
 }: Props) {
   return (
     <View style={{ gap: tokens.space[1] }}>
@@ -44,6 +51,9 @@ export function Field({
           value={value}
           onChangeText={onChangeText}
           keyboardType={keyboardType}
+          placeholder={placeholder}
+          placeholderTextColor={tokens.color.muted}
+          maxLength={maxLength}
           style={{
             fontSize: tokens.font[16],
             fontFamily: tokens.family.regular,
@@ -57,7 +67,7 @@ export function Field({
           {uncertainLabel}
         </T>
       ) : hint ? (
-        <T size={12} color={tokens.color.muted}>
+        <T size={12} color={hintTone === 'expired' ? tokens.color.expired : tokens.color.muted}>
           {hint}
         </T>
       ) : null}

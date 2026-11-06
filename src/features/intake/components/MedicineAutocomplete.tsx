@@ -40,6 +40,7 @@ export function MedicineAutocomplete({
         }}
         uncertain={!!uncertainLabel}
         uncertainLabel={uncertainLabel}
+        placeholder="e.g. Azithral 500"
       />
       {hits.length ? (
         <Card>

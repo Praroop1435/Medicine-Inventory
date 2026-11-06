@@ -1,4 +1,5 @@
 import { createContext, useCallback, useContext, useEffect, useState, type ReactNode } from 'react';
+import { SafeAreaInsetsContext } from 'react-native-safe-area-context';
 import { View } from 'react-native';
 import { T, tokens } from '@/ui';
 
@@ -11,6 +12,8 @@ export function ToastProvider({ children }: { children: ReactNode }) {
   // The object wrapper makes the same message shown twice restart the timer.
   const [toast, setToast] = useState<{ message: string } | null>(null);
   const show = useCallback<Show>((message) => setToast({ message }), []);
+  // Context, not the hook: tests render this without a SafeAreaProvider.
+  const inset = useContext(SafeAreaInsetsContext)?.bottom ?? 0;
 
   useEffect(() => {
     if (!toast) return;
@@ -23,13 +26,14 @@ export function ToastProvider({ children }: { children: ReactNode }) {
       {children}
       {toast ? (
         <View
+          testID="toast"
           accessibilityLiveRegion="polite"
           pointerEvents="none"
           style={{
             position: 'absolute',
             left: tokens.margin,
             right: tokens.margin,
-            bottom: tokens.row + tokens.margin,
+            bottom: inset + tokens.toastOffset,
             padding: tokens.space[3],
             borderRadius: tokens.radius.control,
             backgroundColor: tokens.color.primary,

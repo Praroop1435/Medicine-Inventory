@@ -8,6 +8,7 @@ import type { Batch, Category, Company, Medicine } from '@/domain/types';
 import { AppShell } from '@/features/shared/AppShell';
 import { ToastProvider } from '@/features/shared/Toast';
 import { Button, T, tokens } from '@/ui';
+import { typeExpiry } from '../components/ReviewCard';
 import { useIntake, useSaveDrafts, type BillHeader } from '../IntakeContext';
 import ManualRoute from '../../../../app/intake/manual';
 import ReviewRoute from '../../../../app/intake/review';
@@ -226,11 +227,11 @@ describe('review screen', () => {
       }),
     ]);
     const [matched, fresh] = cards();
-    expect(within(matched).queryByText('New')).toBeNull();
+    expect(within(matched).queryByText('New medicine · pick category and unit')).toBeNull();
     expect(within(matched).getByText('Antibiotics')).toBeOnTheScreen();
     expect(within(matched).queryByRole('button', { name: 'Vitamins' })).toBeNull();
 
-    expect(within(fresh).getByText('New')).toBeOnTheScreen();
+    expect(within(fresh).getByText('New medicine · pick category and unit')).toBeOnTheScreen();
     expect(saveButton()).toHaveAccessibleName('Confirm 2 fields to save');
     await fireEvent.press(within(fresh).getByRole('button', { name: 'Vitamins' }));
     await fireEvent.press(within(fresh).getByRole('button', { name: 'Strip' }));
@@ -249,7 +250,7 @@ describe('review screen', () => {
     ]);
     expect(saveButton()).toHaveAccessibleName('Save 1 item');
     await fireEvent.changeText(screen.getByLabelText('Medicine name'), 'Zyx 10');
-    expect(screen.getByText('New')).toBeOnTheScreen();
+    expect(screen.getByText('New medicine · pick category and unit')).toBeOnTheScreen();
     expect(screen.getByRole('button', { name: 'Antibiotics' })).toBeOnTheScreen();
     expect(screen.getByRole('button', { name: 'Carton' })).toBeOnTheScreen();
     // The company came from the lost match, so it must be confirmed too.
@@ -274,7 +275,7 @@ describe('review screen', () => {
         uncertain: ['companyName'],
       },
     ]);
-    expect(screen.queryByText('New')).toBeNull();
+    expect(screen.queryByText('New medicine · pick category and unit')).toBeNull();
     expect(screen.queryByRole('button', { name: 'Antibiotics' })).toBeNull();
     expect(screen.getByText('Antibiotics')).toBeOnTheScreen();
     expect(screen.getByText('Alembic')).toBeOnTheScreen();
@@ -360,7 +361,7 @@ describe('manual entry', () => {
     expect(screen.getByLabelText('Medicine name').props.value).toBe('Azithral 500');
     expect(screen.getByText('Antibiotics')).toBeOnTheScreen();
     expect(screen.getByText('Alembic')).toBeOnTheScreen();
-    expect(screen.queryByText('New')).toBeNull();
+    expect(screen.queryByText('New medicine · pick category and unit')).toBeNull();
   });
 
   it('prefills from medicineId', async () => {
@@ -419,6 +420,35 @@ describe('manual entry', () => {
     expect((shop as unknown as import('@/domain/types').Shop).units).toContain('kit');
   });
 
+  it('pickers wrap instead of scrolling, so "+ New folder" and "+ Add unit" stay on screen', async () => {
+    const s = await seed();
+    await renderRouter(routes(s.repos), { initialUrl: '/intake/manual' });
+    await fireEvent.changeText(await screen.findByLabelText('Medicine name'), 'Zincovit');
+    const [cats, units] = screen.getAllByTestId('chip-wrap');
+    expect(within(cats).getByRole('button', { name: '+ New folder' })).toBeOnTheScreen();
+    expect(within(units).getByRole('button', { name: '+ Add unit' })).toBeOnTheScreen();
+    expect(cats.props.style).toMatchObject({ flexWrap: 'wrap' });
+  });
+
+  it('expiry: number pad, MM/YY with the slash added, and says how it was read', async () => {
+    const s = await seed();
+    await renderRouter(routes(s.repos), { initialUrl: '/intake/manual' });
+    const expiry = await screen.findByLabelText('Expiry');
+    expect(expiry.props.keyboardType).toBe('number-pad');
+    expect(expiry.props.placeholder).toBe('MM/YY');
+    expect(screen.getByLabelText('Quantity').props.keyboardType).toBe('number-pad');
+    await fireEvent.changeText(expiry, '01');
+    expect(screen.getByLabelText('Expiry').props.value).toBe('01/');
+    await fireEvent.changeText(screen.getByLabelText('Expiry'), '01/30');
+    expect(screen.getByText('Jan 2030')).toBeOnTheScreen();
+    await fireEvent.changeText(screen.getByLabelText('Expiry'), '0120');
+    expect(screen.getByLabelText('Expiry').props.value).toBe('01/20');
+    const past = screen.getByText('Jan 2020 · Already expired');
+    expect(past.props.style).toEqual(
+      expect.arrayContaining([expect.objectContaining({ color: tokens.color.expired })]),
+    );
+  });
+
   it('Save & next saves one row and clears only name, batch, expiry and quantity', async () => {
     const s = await seed();
     const spy = jest.spyOn(s.repos.inventory, 'saveIntake');
@@ -463,4 +493,15 @@ describe('manual entry', () => {
     expect(await screen.findByText('Saved Azithral 500')).toBeOnTheScreen();
     expect(spy).toHaveBeenCalledTimes(1);
   });
+});
+
+describe('typeExpiry', () => {
+  it.each([
+    ['1', '', '1'],
+    ['11', '1', '11/'],
+    ['11', '11/', '11'], // backspacing over the slash doesn't put it back
+    ['112', '11/', '11/2'],
+    ['11/2026', '11/202', '11/2026'],
+    ['Nov 2026', 'Nov 202', 'Nov 2026'],
+  ])('%s after %s → %s', (next, prev, out) => expect(typeExpiry(next, prev)).toBe(out));
 });
