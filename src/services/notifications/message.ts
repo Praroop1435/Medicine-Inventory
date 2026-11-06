@@ -1,5 +1,7 @@
+import { alertCounts } from '@/domain/alerts';
 import { childrenOf } from '@/domain/tree';
-import type { AlertDays, Category } from '@/domain/types';
+import type { AlertDays, Batch, Category } from '@/domain/types';
+import type { OneOff } from './Notifier';
 
 type Counts = { expired: number; soon: number; watch: number };
 
@@ -13,6 +15,25 @@ export function dailyMessage(c: Counts, d: AlertDays): string | null {
   if (c.soon) parts.push(expire(c.soon, d.second));
   else if (c.watch) parts.push(expire(c.watch, d.first));
   return parts.length ? parts.join(' · ') : null;
+}
+
+/**
+ * The next 7 morning alerts after `now` at `time` ("HH:MM"), each with its own day's counts
+ * (expiry is by date, so they're known ahead). Mornings with nothing to say are left out.
+ */
+export function morningAlerts(batches: Batch[], d: AlertDays, time: string, now: Date): OneOff[] {
+  const [h, m] = time.split(':').map(Number);
+  const days: Date[] = [];
+  for (let i = 0; days.length < 7; i++) {
+    const at = new Date(now.getFullYear(), now.getMonth(), now.getDate() + i, h, m);
+    if (at > now) days.push(at);
+  }
+  return days.flatMap((at) => {
+    const c = alertCounts(batches, new Date(at.getFullYear(), at.getMonth(), at.getDate()), d);
+    const body = dailyMessage(c, d);
+    const url = c.expired ? '/alerts/expired' : c.soon ? '/alerts/soon' : '/alerts/watch';
+    return body ? [{ at, title: 'Expiry alert', body, data: { url } }] : [];
+  });
 }
 
 /** The top-level folder checked least recently; never-checked folders come first. */

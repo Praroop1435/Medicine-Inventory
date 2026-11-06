@@ -24,6 +24,11 @@ const ensureChannel = () =>
   }));
 
 let lastTap = '';
+// One id per morning of the week ahead; 'morning' was the old daily repeat.
+const MORNINGS = ['morning', ...Array.from({ length: 7 }, (_, i) => `morning-${i}`)];
+const cancelMornings = async () => {
+  await Promise.all(MORNINGS.map((id) => N.cancelScheduledNotificationAsync(id)));
+};
 
 export const expoNotifier: Notifier = {
   getPermission: async () => (await N.getPermissionsAsync()).status as PermissionStatus,
@@ -40,7 +45,17 @@ export const expoNotifier: Notifier = {
       trigger: { type: N.SchedulableTriggerInputTypes.DAILY, hour, minute, channelId: CHANNEL },
     });
   },
-  cancel: (id) => N.cancelScheduledNotificationAsync(id),
+  async scheduleMornings(alerts) {
+    await ensureChannel();
+    await cancelMornings();
+    for (const [i, a] of alerts.entries())
+      await N.scheduleNotificationAsync({
+        identifier: `morning-${i}`,
+        content: { title: a.title, body: a.body, data: a.data },
+        trigger: { type: N.SchedulableTriggerInputTypes.DATE, date: a.at, channelId: CHANNEL },
+      });
+  },
+  cancel: (id) => (id === 'morning' ? cancelMornings() : N.cancelScheduledNotificationAsync(id)),
   onTap(cb) {
     const open = (r: N.NotificationResponse | null) => {
       if (!r) return;

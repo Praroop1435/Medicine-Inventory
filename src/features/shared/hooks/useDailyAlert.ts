@@ -1,8 +1,7 @@
 import { router, type Href } from 'expo-router';
-import { useEffect } from 'react';
-import { alertCounts } from '@/domain/alerts';
+import { useEffect, useRef } from 'react';
 import { shopNightTime } from '@/domain/types';
-import { dailyMessage, dueCategory, nightReminder } from '@/services/notifications/message';
+import { dueCategory, morningAlerts, nightReminder } from '@/services/notifications/message';
 import { useSession } from '@/features/onboarding/SessionContext';
 import { useNotifier } from '../NotifierContext';
 import { useInventory } from './useInventory';
@@ -21,36 +20,34 @@ export function useDailyAlert() {
   const today = useToday();
 
   const ready = !!shop && !loading;
-  const counts = shop && ready ? alertCounts(batches, today, shop.alertDays) : null;
-  const morning = shop && counts ? dailyMessage(counts, shop.alertDays) : null;
-  const morningUrl = counts?.expired
-    ? '/alerts/expired'
-    : counts?.soon
-      ? '/alerts/soon'
-      : '/alerts/watch';
+  // What was last scheduled, so a snapshot with the same texts doesn't reschedule.
+  const scheduled = useRef('');
   const night = ready ? nightReminder(categories, today) : null;
   const due = ready ? dueCategory(categories) : undefined;
   const nightUrl = due ? `/check/${due.id}` : '/check';
-  const notifyTime = shop?.notifyTime;
   const nightTime = shop && shopNightTime(shop);
 
   // No shop on this phone (left or never joined): no reminders for it.
   useEffect(() => {
     if (session) return;
+    scheduled.current = '';
     notifier.cancel('morning').catch(ignore);
     notifier.cancel('night').catch(ignore);
   }, [notifier, session]);
 
-  // Strings only, so a new snapshot with the same text doesn't reschedule.
+  // `today` re-runs this at midnight, so the week of mornings rolls forward.
   useEffect(() => {
-    if (!ready || !notifyTime) return;
-    if (morning)
-      notifier
-        .scheduleDaily('morning', notifyTime, 'Expiry alert', morning, { url: morningUrl })
-        .catch(ignore);
-    else notifier.cancel('morning').catch(ignore);
-  }, [notifier, ready, notifyTime, morning, morningUrl]);
+    if (!ready || !shop) return;
+    const list = morningAlerts(batches, shop.alertDays, shop.notifyTime, new Date());
+    const key = JSON.stringify(list);
+    if (key === scheduled.current) return;
+    scheduled.current = key;
+    (list.length ? notifier.scheduleMornings(list) : notifier.cancel('morning')).catch(() => {
+      scheduled.current = ''; // retried on the next change
+    });
+  }, [notifier, ready, shop, batches, today]);
 
+  // Strings only, so a new snapshot with the same text doesn't reschedule.
   useEffect(() => {
     if (!night || !nightTime) return;
     notifier

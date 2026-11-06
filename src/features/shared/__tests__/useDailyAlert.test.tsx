@@ -17,9 +17,11 @@ jest.mock('expo-secure-store', () => ({
 const DAY = 86_400_000;
 const TODAY = new Date(2026, 10, 6);
 type Sent = { time: string; title: string; body: string; data: Record<string, string> };
+type Morning = { at: Date; title: string; body: string; data: Record<string, string> };
 
 function fakeNotifier() {
   const scheduled = new Map<string, Sent>();
+  let mornings: Morning[] = [];
   let tap: (d: Record<string, string>) => void = () => {};
   const notifier: Notifier = {
     getPermission: async () => 'granted',
@@ -27,13 +29,22 @@ function fakeNotifier() {
     scheduleDaily: jest.fn(async (id, time, title, body, data) => {
       scheduled.set(id, { time, title, body, data });
     }),
-    cancel: jest.fn(async (id) => void scheduled.delete(id)),
+    scheduleMornings: jest.fn(async (list) => void (mornings = list)),
+    cancel: jest.fn(async (id) => {
+      scheduled.delete(id);
+      if (id === 'morning') mornings = [];
+    }),
     onTap: (cb) => {
       tap = cb;
       return () => {};
     },
   };
-  return { notifier, scheduled, tap: (d: Record<string, string>) => tap(d) };
+  return {
+    notifier,
+    scheduled,
+    mornings: () => mornings,
+    tap: (d: Record<string, string>) => tap(d),
+  };
 }
 
 async function seed() {
@@ -107,21 +118,32 @@ beforeEach(() => {
 });
 afterEach(() => jest.useRealTimers());
 
+const at = (day: number, h: number, m: number) => new Date(2026, 10, day, h, m);
+
 describe('useDailyAlert', () => {
-  it('schedules the morning alert and night reminder from shop data', async () => {
-    const { repos, cough, add } = await seed();
-    await add('S1', 11); // within 30 days
+  it("schedules the next 7 mornings, each with that day's counts, and the night reminder", async () => {
+    const { repos, shopId, deviceId, cough, add } = await seed();
+    await repos.shop.updateShop(shopId, { alertDays: { first: 90, second: 20 } }, deviceId);
+    await add('S1', 11); // ends Nov 30: within 90 days until Nov 9, within 20 from Nov 10
     const f = fakeNotifier();
     await open(repos, f.notifier);
 
-    await waitFor(() =>
-      expect(f.scheduled.get('morning')).toEqual({
-        time: '09:00',
-        title: 'Expiry alert',
-        body: '1 expires within 30 days',
-        data: { url: '/alerts/soon' },
-      }),
+    // It is 10:00, so today's 09:00 has passed: Nov 7 to Nov 13.
+    await waitFor(() => expect(f.mornings()).toHaveLength(7));
+    expect(f.mornings().map((x) => x.at)).toEqual(
+      [7, 8, 9, 10, 11, 12, 13].map((d) => at(d, 9, 0)),
     );
+    expect(f.mornings()[0]).toEqual({
+      at: at(7, 9, 0),
+      title: 'Expiry alert',
+      body: '1 expires within 90 days',
+      data: { url: '/alerts/watch' },
+    });
+    expect(f.mornings()[2].body).toBe('1 expires within 90 days');
+    expect(f.mornings()[3]).toMatchObject({
+      body: '1 expires within 20 days',
+      data: { url: '/alerts/soon' },
+    });
     expect(f.scheduled.get('night')).toEqual({
       time: '21:00',
       title: 'Stock update',
@@ -130,31 +152,32 @@ describe('useDailyAlert', () => {
     });
   });
 
-  it('reschedules when counts or times change, and cancels the morning alert when nothing is due', async () => {
+  it('reschedules when counts or times change, and cancels the morning alerts when nothing is due', async () => {
     const { repos, shopId, deviceId, add } = await seed();
     await add('S1', 11);
     const f = fakeNotifier();
     await open(repos, f.notifier);
-    await waitFor(() => expect(f.scheduled.get('morning')?.body).toBe('1 expires within 30 days'));
+    await waitFor(() => expect(f.mornings()[0]?.body).toBe('1 expires within 30 days'));
 
     await act(() => add('E1', 9)); // expired
     await waitFor(() =>
-      expect(f.scheduled.get('morning')).toMatchObject({
+      expect(f.mornings()[0]).toMatchObject({
         body: '1 expired · 1 expires within 30 days',
         data: { url: '/alerts/expired' },
       }),
     );
 
     await act(() =>
-      repos.shop.updateShop(shopId, { notifyTime: '08:15', nightTime: '22:30' }, deviceId),
+      repos.shop.updateShop(shopId, { notifyTime: '10:15', nightTime: '22:30' }, deviceId),
     );
-    await waitFor(() => expect(f.scheduled.get('morning')?.time).toBe('08:15'));
+    // 10:15 is still ahead today.
+    await waitFor(() => expect(f.mornings()[0]?.at).toEqual(at(6, 10, 15)));
     expect(f.scheduled.get('night')?.time).toBe('22:30');
 
     let ids: string[] = [];
     repos.inventory.watchLiveBatches(shopId, (b) => (ids = b.map((x) => x.id)))();
     for (const id of ids) await act(() => repos.inventory.markReturned(shopId, id, deviceId));
-    await waitFor(() => expect(f.scheduled.has('morning')).toBe(false));
+    await waitFor(() => expect(f.mornings()).toEqual([]));
     expect(f.notifier.cancel).toHaveBeenCalledWith('morning');
     expect(f.scheduled.has('night')).toBe(true);
   });
@@ -175,6 +198,7 @@ describe('useDailyAlert', () => {
     await waitFor(() => expect(f.notifier.cancel).toHaveBeenCalledWith('morning'));
     expect(f.notifier.cancel).toHaveBeenCalledWith('night');
     expect(f.notifier.scheduleDaily).not.toHaveBeenCalled();
+    expect(f.notifier.scheduleMornings).not.toHaveBeenCalled();
   });
 
   it('opens the screen a tapped reminder points to', async () => {
