@@ -6,7 +6,7 @@ ios/
 .env
 .env.*
 !.env.example
-google-services.json
+google-services*.json
 *.keystore
 *.jks
 coverage/
