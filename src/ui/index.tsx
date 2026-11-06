@@ -9,6 +9,7 @@ export { CountStrip } from './CountStrip';
 export { Button } from './Button';
 export { ButtonRow } from './ButtonRow';
 export { Stepper } from './Stepper';
+export { SearchField } from './SearchField';
 export { Field } from './Field';
 export { Chip } from './Chip';
 export { ChipRow } from './ChipRow';

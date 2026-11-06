@@ -256,4 +256,31 @@ describe('home', () => {
     expect((await screen.findAllByLabelText('Loading')).length).toBeGreaterThan(0);
     expect(screen.queryByRole('button', { name: /^Expired/ })).toBeNull();
   });
+
+  it('searches by name and batch number, taps through, and clears', async () => {
+    const { repos } = await seed();
+    await open(repos);
+    await fireEvent.changeText(await screen.findByLabelText('Search medicines'), 'azi');
+    expect(await screen.findByRole('button', { name: /^Azithral,/ })).toBeOnTheScreen();
+    expect(screen.queryByRole('button', { name: /^Expired/ })).toBeNull();
+    await fireEvent.changeText(screen.getByLabelText('Search medicines'), 'p1');
+    expect(
+      await screen.findByRole('button', { name: /^Crocin, GSK · 3 strips · Batch P1/ }),
+    ).toBeOnTheScreen();
+    const push = jest.spyOn(router, 'push').mockImplementation(() => {});
+    await fireEvent.press(screen.getByRole('button', { name: /^Crocin,/ }));
+    expect(push).toHaveBeenCalledWith(expect.stringMatching(/^\/medicine\/.+/));
+    await fireEvent.changeText(screen.getByLabelText('Search medicines'), 'zzzz');
+    expect(await screen.findByText('No medicine matches “zzzz”')).toBeOnTheScreen();
+    await fireEvent.press(screen.getByRole('button', { name: 'Clear search' }));
+    expect(await screen.findByRole('button', { name: 'Expired 3' })).toBeOnTheScreen();
+  });
+
+  it('All N opens the Stock tab', async () => {
+    const { repos } = await seed();
+    await open(repos);
+    const push = jest.spyOn(router, 'push').mockImplementation(() => {});
+    await fireEvent.press(await screen.findByRole('button', { name: 'All 9' }));
+    expect(push).toHaveBeenCalledWith('/stock');
+  });
 });
