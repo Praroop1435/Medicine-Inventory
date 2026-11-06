@@ -35,13 +35,12 @@ import {
 import { descendantIds } from '@/domain/tree';
 import { newId } from '@/lib/ids';
 import type { CheckSession, Repos, Unsub } from '../repositories';
-import { planIntake, resolveMedicine } from '../shared/intake';
+import { chunkPlan, planIntake, resolveMedicine, type IntakePlan } from '../shared/intake';
 import {
   CATEGORIES,
   DEFAULT_ALERT_DAYS,
   DEFAULT_NOTIFY_TIME,
   checkDeletable,
-  checkMerge,
   folderName,
   moveChange,
   newJoinSecret,
@@ -164,33 +163,14 @@ export function createFirebaseRepos(opts: { onWriteError?: (e: Error) => void } 
       also?.(wb, c);
     });
   };
-  // Status is only written when it changes, so a stale 'active' never overwrites a return elsewhere.
+  // A sale writes status only when it closes the batch, so a stale 'active' never overwrites a
+  // return elsewhere.
   const closed = (c: StockChange) =>
     c.batch.status === 'active' ? {} : { status: c.batch.status };
+  // A count is the shelf truth, so it always writes the status it implies: a phone that still
+  // shows the batch live doesn't leave counted stock hidden under another phone's 'removed'.
+  const counted = (c: StockChange) => ({ qty: c.batch.qty, status: c.batch.status });
 
-  const merge = async (
-    shopId: string,
-    c: 'companies' | 'categories',
-    field: 'companyId' | 'categoryId',
-    fromId: string,
-    intoId: string,
-  ) => {
-    const found = await Promise.all([
-      readDoc(ref(shopId, c, fromId)),
-      readDoc(ref(shopId, c, intoId)),
-    ]);
-    checkMerge(
-      fromId,
-      intoId,
-      found.filter((s) => s.exists()).map((s) => ({ id: s.id })),
-    );
-    const meds = await readDocs(query(col(shopId, 'medicines'), where(field, '==', fromId)));
-    // shortcut: one batch caps at 500 writes; fine for a single company/category in a 2,000-medicine shop.
-    write((wb) => {
-      meds.docs.forEach((m) => wb.update(m.ref, { [field]: intoId }));
-      wb.delete(ref(shopId, c, fromId));
-    });
-  };
   const categories = async (shopId: string) =>
     (await readDocs(col(shopId, 'categories'))).docs.map((d) => categoryFromDoc(d.id, d.data()));
   const update = (r: ReturnType<typeof ref>, data: DocumentData) =>
@@ -320,17 +300,12 @@ export function createFirebaseRepos(opts: { onWriteError?: (e: Error) => void } 
         ]);
         const medicines = medSnap.docs.map((d) => withId<Medicine>(d.id, d.data()));
         const companies = coSnap.docs.map((d) => withId<Company>(d.id, d.data()));
-        // Only batches of medicines the drafts resolve to can be duplicates.
+        // Only batches of medicines the drafts resolve to can be duplicates. Every status: a
+        // sold-out (removed) batch is restocked as the same row.
         const medIds = new Set(drafts.flatMap((d) => resolveMedicine(d, medicines)?.id ?? []));
         const found = await Promise.all(
           [...medIds].map((id) =>
-            readDocs(
-              query(
-                col(shopId, 'batches'),
-                where('medicineId', '==', id),
-                where('status', '==', 'active'),
-              ),
-            ),
+            readDocs(query(col(shopId, 'batches'), where('medicineId', '==', id))),
           ),
         );
         const batches = found.flatMap((s) =>
@@ -338,18 +313,26 @@ export function createFirebaseRepos(opts: { onWriteError?: (e: Error) => void } 
         );
         const oldQty = new Map(batches.map((b) => [b.id, b.qty]));
         const p = planIntake({ medicines, companies, batches }, drafts, bill, deviceId, Date.now());
-        write((wb) => {
-          if (p.bill) wb.set(ref(shopId, 'bills', p.bill.id), withoutId(p.bill));
-          p.companies.forEach((c) => wb.set(ref(shopId, 'companies', c.id), withoutId(c)));
-          p.medicines.forEach((m) => wb.set(ref(shopId, 'medicines', m.id), withoutId(m)));
-          p.batches.forEach((b) => {
+        const fill = (wb: WriteBatch, c: IntakePlan) => {
+          if (c.bill) wb.set(ref(shopId, 'bills', c.bill.id), withoutId(c.bill));
+          c.companies.forEach((x) => wb.set(ref(shopId, 'companies', x.id), withoutId(x)));
+          c.medicines.forEach((m) => wb.set(ref(shopId, 'medicines', m.id), withoutId(m)));
+          c.batches.forEach((b) => {
             const old = oldQty.get(b.id);
-            // Existing batch: increment so a concurrent sale on another phone isn't overwritten.
+            // Existing batch: increment so a concurrent sale on another phone isn't overwritten,
+            // and say 'active' so stock added to a batch another phone just closed stays visible.
             if (old === undefined) wb.set(ref(shopId, 'batches', b.id), batchToDoc(b));
-            else wb.update(ref(shopId, 'batches', b.id), { qty: increment(b.qty - old) });
+            else
+              wb.update(ref(shopId, 'batches', b.id), {
+                qty: increment(b.qty - old),
+                status: 'active',
+              });
           });
-          p.events.forEach((e) => wb.set(ref(shopId, 'events', e.id), withoutId(e)));
-        });
+          c.events.forEach((e) => wb.set(ref(shopId, 'events', e.id), withoutId(e)));
+        };
+        // Each chunk is committed in order but not awaited: offline, an awaited commit never
+        // settles, so later chunks would never reach the local cache. Errors go to onWriteError.
+        chunkPlan(p).forEach((c) => write((wb) => fill(wb, c)));
       },
       sellOne: (shopId, batchId, deviceId) =>
         change(
@@ -360,12 +343,7 @@ export function createFirebaseRepos(opts: { onWriteError?: (e: Error) => void } 
         ),
       // Absolute qty: the shelf count is the truth.
       setCount: (shopId, batchId, qty, deviceId, type) =>
-        change(
-          shopId,
-          batchId,
-          (b, at) => setCountChange(b, qty, type, deviceId, at),
-          (c) => ({ qty: c.batch.qty, ...closed(c) }),
-        ),
+        change(shopId, batchId, (b, at) => setCountChange(b, qty, type, deviceId, at), counted),
       markReturned: (shopId, batchId, deviceId) =>
         change(
           shopId,
@@ -407,12 +385,6 @@ export function createFirebaseRepos(opts: { onWriteError?: (e: Error) => void } 
         );
         write((wb) => wb.delete(ref(shopId, 'categories', id)));
       },
-      renameCompany: async (shopId, companyId, name) =>
-        update(ref(shopId, 'companies', companyId), { name: name.trim() }),
-      mergeCompanies: (shopId, fromId, intoId) =>
-        merge(shopId, 'companies', 'companyId', fromId, intoId),
-      mergeCategories: (shopId, fromId, intoId) =>
-        merge(shopId, 'categories', 'categoryId', fromId, intoId),
     },
     check: {
       watchCheck: (shopId, categoryId, cb) =>
@@ -431,7 +403,7 @@ export function createFirebaseRepos(opts: { onWriteError?: (e: Error) => void } 
           shopId,
           batchId,
           (b, at) => setCountChange(b, qty, 'checked', deviceId, at),
-          (c) => ({ qty: c.batch.qty, ...closed(c) }),
+          counted,
           // Merge deep-merges `checked`, so two phones ticking offline keep both rows.
           (wb, c) =>
             wb.set(

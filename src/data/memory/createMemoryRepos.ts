@@ -18,7 +18,6 @@ import {
   DEFAULT_ALERT_DAYS,
   DEFAULT_NOTIFY_TIME,
   checkDeletable,
-  checkMerge,
   folderName,
   moveChange,
   newJoinSecret,
@@ -237,26 +236,6 @@ export function createMemoryRepos(now: () => number = Date.now): Repos {
           checkDeletable(s.categories, s.medicines, id);
           s.categories = s.categories.filter((c) => c.id !== id);
         }),
-      async renameCompany(shopId, companyId, name) {
-        const co = get(shopId).companies.find((c) => c.id === companyId);
-        if (!co) throw new Error('company not found');
-        co.name = name.trim();
-        notify();
-      },
-      async mergeCompanies(shopId, fromId, intoId) {
-        const s = get(shopId);
-        checkMerge(fromId, intoId, s.companies);
-        s.medicines.forEach((m) => m.companyId === fromId && (m.companyId = intoId));
-        s.companies = s.companies.filter((c) => c.id !== fromId);
-        notify();
-      },
-      async mergeCategories(shopId, fromId, intoId) {
-        const s = get(shopId);
-        checkMerge(fromId, intoId, s.categories);
-        s.medicines.forEach((m) => m.categoryId === fromId && (m.categoryId = intoId));
-        s.categories = s.categories.filter((c) => c.id !== fromId);
-        notify();
-      },
     },
     check: {
       watchCheck: (shopId, categoryId, cb) =>

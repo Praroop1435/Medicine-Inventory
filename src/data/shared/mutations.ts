@@ -19,15 +19,6 @@ export const DEFAULT_NOTIFY_TIME = '09:00';
 export const newJoinSecret = () =>
   Array.from({ length: 3 }, () => Math.random().toString(36).slice(2, 10).padEnd(8, '0')).join('');
 
-export const sameBatchNo = (a: string, b: string) =>
-  a.trim().toLowerCase() === b.trim().toLowerCase();
-
-export function checkMerge(fromId: string, intoId: string, all: { id: string }[]) {
-  if (fromId === intoId) throw new Error('cannot merge into the same record');
-  if (!all.some((x) => x.id === fromId) || !all.some((x) => x.id === intoId))
-    throw new Error('record not found');
-}
-
 export function folderName(name: string): string {
   const n = name.trim();
   if (!n) throw new Error('folder name is required');
@@ -90,7 +81,8 @@ export function setCountChange(
   at: number,
 ): StockChange {
   if (!Number.isInteger(qty) || qty < 0) throw new Error('invalid quantity');
-  if (b.status !== 'active') throw new Error('batch is not active');
+  // The shelf is the truth: a removed batch counted above zero is live again.
+  if (b.status === 'returned') throw new Error('batch is not active');
   const batch: Batch = { ...b, qty, status: closeAtZero(qty) };
   return { batch, event: eventFor(batch, type, qty - b.qty, deviceId, at) };
 }

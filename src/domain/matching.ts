@@ -40,6 +40,7 @@ export function findMedicineMatch(name: string, medicines: Medicine[]): Medicine
   const q = normalizeName(name);
   if (!q) return null;
   const qn = numbers(q);
+  const words = q.split(' ').length;
   let best: Medicine | null = null;
   let bestScore = 0.8;
   let bestFound = false;
@@ -47,6 +48,8 @@ export function findMedicineMatch(name: string, medicines: Medicine[]): Medicine
     const n = normalizeName(m.name);
     if (numbers(n) !== qn) continue;
     if (n === q) return m;
+    // A missing or extra word is a different product (CLAVAM DRY vs CLAVAM BID DRY), not a typo.
+    if (n.split(' ').length !== words) continue;
     const s = dice(q, n);
     if (s >= bestScore && (!bestFound || s > bestScore)) {
       best = m;

@@ -1,5 +1,5 @@
-import { findMedicineMatch } from './matching';
-import type { Company, Medicine, Unit, YearMonth } from './types';
+import { findMedicineMatch, normalizeName } from './matching';
+import type { Batch, Company, Medicine, Unit, YearMonth } from './types';
 
 export type DraftField =
   'medicineName' | 'companyName' | 'batchNo' | 'expiry' | 'qty' | 'categoryId' | 'unit';
@@ -38,17 +38,48 @@ export function emptyDraft(source: DraftBatch['source']): DraftBatch {
   };
 }
 
+/** Ties a draft to this medicine (by id) and takes its company, folder and unit. */
+export const fromMedicine = (d: DraftBatch, m: Medicine, companies: Company[]): DraftBatch => ({
+  ...d,
+  medicineName: d.medicineName || m.name,
+  matchedMedicineId: m.id,
+  companyName: companies.find((c) => c.id === m.companyId)?.name ?? d.companyName,
+  categoryId: m.categoryId,
+  unit: m.unit,
+});
+
+/** Only a name that differs from the medicine it matched (after normalizing) is a guess. */
+export const isFuzzyMatch = (name: string, m: Medicine) =>
+  normalizeName(name) !== normalizeName(m.name);
+
 export function applyMatch(d: DraftBatch, medicines: Medicine[], companies: Company[]): DraftBatch {
   const m = findMedicineMatch(d.medicineName, medicines);
   if (!m) return { ...d, matchedMedicineId: null };
-  return {
-    ...d,
-    matchedMedicineId: m.id,
-    companyName: companies.find((c) => c.id === m.companyId)?.name ?? d.companyName,
-    categoryId: m.categoryId,
-    unit: m.unit,
-  };
+  const next = fromMedicine(d, m, companies);
+  // A new guess needs a human; re-applying the same match keeps their confirmation.
+  const doubt =
+    m.id !== d.matchedMedicineId &&
+    isFuzzyMatch(d.medicineName, m) &&
+    !d.uncertain.includes('medicineName');
+  return doubt ? { ...next, uncertain: [...next.uncertain, 'medicineName'] } : next;
 }
+
+export const sameBatchNo = (a: string, b: string) =>
+  a.trim().toLowerCase() === b.trim().toLowerCase();
+
+/** The batch a draft adds to instead of making a new row: same medicine, batch no and expiry. */
+export const mergeTarget = <B extends Pick<Batch, 'medicineId' | 'batchNo' | 'expiry'>>(
+  batches: B[],
+  medicineId: string,
+  d: Pick<DraftBatch, 'batchNo' | 'expiry'>,
+): B | undefined =>
+  batches.find(
+    (b) =>
+      b.medicineId === medicineId &&
+      sameBatchNo(b.batchNo, d.batchNo) &&
+      b.expiry.year === d.expiry?.year &&
+      b.expiry.month === d.expiry?.month,
+  );
 
 export function draftIssues(d: DraftBatch): DraftField[] {
   const out: DraftField[] = [];

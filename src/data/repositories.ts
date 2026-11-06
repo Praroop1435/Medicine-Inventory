@@ -76,9 +76,6 @@ export interface InventoryRepo {
   renameCategory(shopId: string, id: string, name: string, deviceId: string): Promise<void>;
   /** Rejects unless the folder has no sub-folders and no medicines. */
   deleteCategory(shopId: string, id: string, deviceId: string): Promise<void>;
-  renameCompany(shopId: string, companyId: string, name: string): Promise<void>;
-  mergeCompanies(shopId: string, fromId: string, intoId: string): Promise<void>; // repoints medicines, deletes fromId
-  mergeCategories(shopId: string, fromId: string, intoId: string): Promise<void>;
 }
 
 /** One category's stock check in progress; resumable from any phone. */

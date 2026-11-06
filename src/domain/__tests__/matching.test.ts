@@ -35,4 +35,9 @@ describe('findMedicineMatch', () => {
     expect(findMedicineMatch('dolo 650', [b, a])).toBe(a);
     expect(findMedicineMatch('Crocin', [a])).toBeNull();
   });
+  it('never matches names with a different number of words (CLAVAM DRY vs CLAVAM BID DRY)', () => {
+    const bid = med('bid', 'CLAVAM BID DRY SYP');
+    expect(findMedicineMatch('CLAVAM DRY SYP', [bid])).toBeNull();
+    expect(findMedicineMatch('CLAVAM BID DRY SYP', [bid])).toBe(bid);
+  });
 });

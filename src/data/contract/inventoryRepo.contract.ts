@@ -241,6 +241,40 @@ export function runInventoryContract(make: () => Repos): void {
     expect(events(meds()[0].id)).toHaveLength(2);
   });
 
+  it('a different expiry under the same batch no is its own batch', async () => {
+    await save([draft({ qty: 2 })]);
+    await save([draft({ qty: 3, expiry: { year: 2027, month: 9 } })]);
+    expect(
+      batches()
+        .map((b) => [b.batchNo, b.expiry.month, b.qty])
+        .sort(),
+    ).toEqual([
+      ['B1', 6, 2],
+      ['B1', 9, 3],
+    ]);
+  });
+
+  it('restocking a sold-out batch brings the same row back live', async () => {
+    await save([draft({ qty: 1 })]);
+    const id = batches()[0].id;
+    await inv().sellOne(shopId, id, deviceId);
+    expect(batches()).toHaveLength(0);
+    await save([draft({ qty: 4 })]);
+    expect(batches()).toEqual([expect.objectContaining({ id, qty: 4, status: 'active' })]);
+  });
+
+  it('counting a sold-out batch above zero brings it back live', async () => {
+    await save([draft({ qty: 1 })]);
+    const id = batches()[0].id;
+    await inv().setCount(shopId, id, 0, deviceId, 'count_fixed');
+    expect(batches()).toHaveLength(0);
+    await r.check.markChecked(shopId, catId, id, 2, deviceId);
+    expect(batches()).toEqual([expect.objectContaining({ id, qty: 2, status: 'active' })]);
+    await inv().setCount(shopId, id, 0, deviceId, 'count_fixed');
+    await inv().setCount(shopId, id, 3, deviceId, 'count_fixed');
+    expect(batches()).toEqual([expect.objectContaining({ id, qty: 3, status: 'active' })]);
+  });
+
   it('same medicine twice in one intake yields one medicine, two batches', async () => {
     await save([
       draft({ medicineName: 'Azithral 500', batchNo: 'A' }),
@@ -276,22 +310,6 @@ export function runInventoryContract(make: () => Repos): void {
     await save([draft({})]);
     await inv().markReturned(shopId, batches()[0].id, deviceId);
     expect(batches()).toHaveLength(0);
-  });
-
-  it('merges companies and categories', async () => {
-    await save([
-      draft({ companyName: 'A' }),
-      draft({ medicineName: 'Other', companyName: 'B', batchNo: 'Z' }),
-    ]);
-    const [a, b] = comps();
-    await inv().mergeCompanies(shopId, a.id, b.id);
-    expect(comps()).toHaveLength(1);
-    expect(meds().every((m) => m.companyId === b.id)).toBe(true);
-    const cs = last<Category[]>((cb) => inv().watchCategories(shopId, cb));
-    await inv().mergeCategories(shopId, cs[0].id, cs[1].id);
-    expect(meds().every((m) => m.categoryId === cs[1].id)).toBe(true);
-    await inv().renameCompany(shopId, b.id, 'Renamed');
-    expect(comps()[0].name).toBe('Renamed');
   });
 
   it('watch calls back immediately and on change, and unsubscribes', async () => {
@@ -334,16 +352,6 @@ export function runInventoryContract(make: () => Repos): void {
     await inv().markReturned(shopId, id, deviceId);
     await expect(inv().setCount(shopId, id, 1, deviceId, 'checked')).rejects.toThrow(/not active/);
     await expect(inv().markReturned(shopId, id, deviceId)).rejects.toThrow(/not active/);
-  });
-
-  it('merges reject same or missing ids', async () => {
-    await save([draft({})]);
-    const [a] = comps();
-    const [c] = last<Category[]>((cb) => inv().watchCategories(shopId, cb));
-    await expect(inv().mergeCompanies(shopId, a.id, a.id)).rejects.toThrow(/not found|same/);
-    await expect(inv().mergeCompanies(shopId, a.id, 'nope')).rejects.toThrow(/not found|same/);
-    await expect(inv().mergeCategories(shopId, c.id, c.id)).rejects.toThrow(/not found|same/);
-    await expect(inv().mergeCategories(shopId, 'nope', c.id)).rejects.toThrow(/not found|same/);
   });
 
   describe('check', () => {

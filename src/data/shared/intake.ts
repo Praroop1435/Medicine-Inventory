@@ -1,8 +1,8 @@
-import { draftIssues, type DraftBatch } from '@/domain/draft';
-import { findMedicineMatch, normalizeName } from '@/domain/matching';
+import { draftIssues, mergeTarget, type DraftBatch } from '@/domain/draft';
+import { normalizeName } from '@/domain/matching';
 import type { Batch, Bill, Company, Medicine, StockEvent } from '@/domain/types';
 import { newId } from '@/lib/ids';
-import { eventFor, sameBatchNo } from './mutations';
+import { eventFor } from './mutations';
 
 export type IntakeState = { medicines: Medicine[]; companies: Company[]; batches: Batch[] };
 
@@ -15,9 +15,16 @@ export type IntakePlan = {
   events: StockEvent[];
 };
 
-export const resolveMedicine = (d: DraftBatch, medicines: Medicine[]): Medicine | null =>
-  medicines.find((m) => m.id === d.matchedMedicineId) ??
-  findMedicineMatch(d.medicineName, medicines);
+// Only the id the review settled on, or an exact name: a near name was either flagged on review
+// and kept as matchedMedicineId, or turned down there, so guessing again here would merge products.
+export function resolveMedicine(d: DraftBatch, medicines: Medicine[]): Medicine | null {
+  const n = normalizeName(d.medicineName);
+  return (
+    medicines.find((m) => m.id === d.matchedMedicineId) ??
+    (n ? medicines.find((m) => normalizeName(m.name) === n) : undefined) ??
+    null
+  );
+}
 
 // Validates every draft before returning, so a throw means nothing may be written.
 export function planIntake(
@@ -67,15 +74,19 @@ export function planIntake(
       medicines.push(med);
       plan.medicines.push(med);
     }
-    const medId = med.id;
-    let b = batches.find(
-      (x) => x.status === 'active' && x.medicineId === medId && sameBatchNo(x.batchNo, d.batchNo),
+    // A returned batch went back to the supplier; a removed one is restocked as the same row.
+    let b = mergeTarget(
+      batches.filter((x) => x.status !== 'returned'),
+      med.id,
+      d,
     );
-    if (b) b.qty += d.qty;
-    else {
+    if (b) {
+      if (b.status !== 'active') Object.assign(b, { status: 'active', qty: 0 });
+      b.qty += d.qty;
+    } else {
       b = {
         id: newId(),
-        medicineId: medId,
+        medicineId: med.id,
         batchNo: d.batchNo.trim(),
         expiry: d.expiry,
         qty: d.qty,
@@ -93,4 +104,39 @@ export function planIntake(
   }
   plan.batches = [...touched.values()];
   return plan;
+}
+
+/**
+ * Splits a plan into plans of at most `max` writes (Firestore caps a batch at 500), in an order
+ * where nothing lands before what it points at. The bill goes first; a batch and its events are
+ * never split.
+ */
+export function chunkPlan(p: IntakePlan, max = 450): IntakePlan[] {
+  const empty = (): IntakePlan => ({
+    bill: null,
+    companies: [],
+    medicines: [],
+    batches: [],
+    events: [],
+  });
+  const out = [empty()];
+  let size = 0;
+  const room = (n: number) => {
+    if (size > 0 && size + n > max) {
+      out.push(empty());
+      size = 0;
+    }
+    size += n;
+    return out[out.length - 1];
+  };
+  if (p.bill) room(1).bill = p.bill;
+  p.companies.forEach((c) => room(1).companies.push(c));
+  p.medicines.forEach((m) => room(1).medicines.push(m));
+  for (const b of p.batches) {
+    const ev = p.events.filter((e) => e.batchId === b.id);
+    const c = room(1 + ev.length);
+    c.batches.push(b);
+    c.events.push(...ev);
+  }
+  return out;
 }

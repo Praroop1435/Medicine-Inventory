@@ -1,11 +1,5 @@
 import type { Batch } from '@/domain/types';
-import {
-  checkMerge,
-  newJoinSecret,
-  returnChange,
-  sellOneChange,
-  setCountChange,
-} from '../mutations';
+import { newJoinSecret, returnChange, sellOneChange, setCountChange } from '../mutations';
 
 const batch = (o: Partial<Batch> = {}): Batch => ({
   id: 'b1',
@@ -54,9 +48,15 @@ describe('stock changes', () => {
     });
     expect(() => setCountChange(batch(), -1, 'checked', 'd1', 1)).toThrow(/invalid/);
     expect(() => setCountChange(batch(), 1.5, 'checked', 'd1', 1)).toThrow(/invalid/);
-    expect(() => setCountChange(batch({ status: 'removed' }), 1, 'checked', 'd1', 1)).toThrow(
+    expect(() => setCountChange(batch({ status: 'returned' }), 1, 'checked', 'd1', 1)).toThrow(
       /not active/,
     );
+  });
+
+  it('setCount is the shelf truth: a counted removed batch is live again', () => {
+    const c = setCountChange(batch({ qty: 0, status: 'removed' }), 4, 'checked', 'd1', 1);
+    expect(c.batch).toMatchObject({ qty: 4, status: 'active' });
+    expect(c.event.delta).toBe(4);
   });
 
   it('markReturned writes a negative delta for the remaining qty', () => {
@@ -64,15 +64,6 @@ describe('stock changes', () => {
     expect(r.batch.status).toBe('returned');
     expect(r.event).toMatchObject({ type: 'returned', delta: -4 });
     expect(() => returnChange(r.batch, 'd1', 1)).toThrow(/not active/);
-  });
-});
-
-describe('checkMerge', () => {
-  const all = [{ id: 'a' }, { id: 'b' }];
-  it('rejects same or missing ids', () => {
-    expect(() => checkMerge('a', 'a', all)).toThrow(/same/);
-    expect(() => checkMerge('a', 'x', all)).toThrow(/not found/);
-    expect(() => checkMerge('a', 'b', all)).not.toThrow();
   });
 });
 

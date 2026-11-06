@@ -124,6 +124,21 @@ describe('membership', () => {
     await assertFails(updateDoc(doc(db('bob'), 'shops/s1/batches/b1'), { qty: increment(-1) }));
   });
 
+  it('a member can bring a sold-out batch back: restock increment or count, with status active', async () => {
+    const f = db('alice');
+    await assertSucceeds(updateDoc(doc(f, 'shops/s1/batches/b1'), { qty: 0, status: 'removed' }));
+    await assertSucceeds(
+      updateDoc(doc(f, 'shops/s1/batches/b1'), { qty: increment(4), status: 'active' }),
+    );
+    await assertSucceeds(updateDoc(doc(f, 'shops/s1/batches/b1'), { qty: 0, status: 'removed' }));
+    await assertSucceeds(updateDoc(doc(f, 'shops/s1/batches/b1'), { qty: 2, status: 'active' }));
+  });
+
+  it('a member can read its own device doc (join retry)', async () => {
+    await assertSucceeds(getDoc(doc(db('alice'), 'shops/s1/devices/alice')));
+    await assertFails(getDoc(doc(db('gone'), 'shops/s1/devices/gone')));
+  });
+
   it('device updates are limited to rename and remove; nobody un-removes a device', async () => {
     const f = db('alice');
     await assertSucceeds(updateDoc(doc(f, 'shops/s1/devices/gone'), { displayName: 'Renamed' }));

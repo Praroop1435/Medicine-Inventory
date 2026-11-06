@@ -1,4 +1,12 @@
-import { applyMatch, canSave, confirmField, draftIssues, emptyDraft } from '../draft';
+import {
+  applyMatch,
+  canSave,
+  confirmField,
+  draftIssues,
+  emptyDraft,
+  fromMedicine,
+  mergeTarget,
+} from '../draft';
 import type { DraftBatch } from '../draft';
 import type { Company, Medicine } from '../types';
 
@@ -58,6 +66,24 @@ describe('applyMatch', () => {
       unit: 'box',
     });
   });
+  it('a fuzzy match makes a human check the name; an exact one does not', () => {
+    const exact = applyMatch(full({ medicineName: 'AZITHRAL-500' }), meds, cos);
+    expect(exact.uncertain).toEqual([]);
+    const fuzzy = applyMatch(full({ medicineName: 'Azitral 500' }), meds, cos);
+    expect(fuzzy).toMatchObject({ matchedMedicineId: 'm1', uncertain: ['medicineName'] });
+    // Re-applying the same match keeps a confirmation.
+    expect(applyMatch(confirmField(fuzzy, 'medicineName'), meds, cos).uncertain).toEqual([]);
+  });
+  it('fromMedicine matches by id, not by name', () => {
+    const twin: Medicine = { ...meds[0], id: 'm2', categoryId: 'cat2' };
+    expect(fromMedicine(emptyDraft('manual'), twin, cos)).toMatchObject({
+      medicineName: 'Azithral 500',
+      matchedMedicineId: 'm2',
+      categoryId: 'cat2',
+      companyName: 'Alembic',
+      unit: 'box',
+    });
+  });
   it('clears match but keeps fields when none', () => {
     const d = applyMatch(full({ matchedMedicineId: 'old', medicineName: 'Zzz' }), meds, cos);
     expect(d).toMatchObject({ matchedMedicineId: null, companyName: 'Alembic', categoryId: 'c1' });
@@ -72,4 +98,17 @@ describe('canSave / confirmField', () => {
     expect(canSave([confirmField(d, 'expiry')])).toBe(true);
   });
   it('blocks on issues', () => expect(canSave([full({ qty: 0 })])).toBe(false));
+});
+
+describe('mergeTarget', () => {
+  const b = { id: 'b1', medicineId: 'm1', batchNo: 'B1', expiry: { year: 2027, month: 3 } };
+  it('finds the batch with the same medicine, batch no (any case) and expiry', () => {
+    expect(mergeTarget([b], 'm1', full({ batchNo: ' b1 ' }))).toBe(b);
+  });
+  it('a different expiry, batch no or medicine is a separate batch', () => {
+    expect(mergeTarget([b], 'm1', full({ expiry: { year: 2027, month: 4 } }))).toBeUndefined();
+    expect(mergeTarget([b], 'm1', full({ batchNo: 'B2' }))).toBeUndefined();
+    expect(mergeTarget([b], 'm2', full())).toBeUndefined();
+    expect(mergeTarget([b], 'm1', full({ expiry: null }))).toBeUndefined();
+  });
 });
