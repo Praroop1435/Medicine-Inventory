@@ -132,6 +132,19 @@ export function createMemoryRepos(now: () => number = Date.now): Repos {
           s.shop.units = list.includes(u) ? list : [...list, u];
         }),
       watchDevices: (shopId, cb) => watch(shopId, (s) => s.devices, cb),
+      watchMembership(shopId, deviceId, onLost) {
+        let fired = false;
+        return watch(
+          shopId,
+          (s) => s.devices.find((d) => d.id === deviceId)?.removed ?? true,
+          (removed) => {
+            if (removed && !fired) {
+              fired = true;
+              onLost();
+            }
+          },
+        );
+      },
       async renameDevice(shopId, deviceId, name) {
         const d = get(shopId).devices.find((x) => x.id === deviceId);
         if (!d) throw new Error('device is not a member of this shop');

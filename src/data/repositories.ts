@@ -27,6 +27,8 @@ export interface ShopRepo {
   /** Adds a unit to the shop's list (trimmed, lowercase); a no-op when already there. */
   addUnit(shopId: string, unit: string, deviceId: string): Promise<void>;
   watchDevices(shopId: string, cb: (d: Device[]) => void): Unsub;
+  /** Calls onLost once when this phone is removed from the shop (or may no longer read it). */
+  watchMembership(shopId: string, deviceId: string, onLost: () => void): Unsub;
   renameDevice(shopId: string, deviceId: string, name: string): Promise<void>;
   removeDevice(shopId: string, deviceId: string, byDeviceId: string): Promise<void>;
   rotateJoinSecret(shopId: string, byDeviceId: string): Promise<string>;

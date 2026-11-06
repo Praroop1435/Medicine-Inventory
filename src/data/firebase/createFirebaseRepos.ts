@@ -120,7 +120,7 @@ export function createFirebaseRepos(opts: { onWriteError?: (e: Error) => void } 
     });
   const ref = (shopId: string, c: ShopCollection, id: string) => doc(db, docPath(shopId, c, id));
   const col = (shopId: string, c: ShopCollection) => collection(db, colPath(shopId, c));
-  // shortcut: listener errors (e.g. after this phone is removed) are only logged; surface them in the UI if needed.
+  // Listener errors are logged; losing membership is surfaced through shop.watchMembership.
   const onError = (e: CodedError) => console.warn('firestore listener', e.code, e.message);
   const list = <T>(
     q: Query,
@@ -217,9 +217,13 @@ export function createFirebaseRepos(opts: { onWriteError?: (e: Error) => void } 
           await online(wb.commit());
         } catch (e) {
           const code = (e as CodedError).code;
-          if (code === 'firestore/permission-denied')
+          if (code !== 'firestore/permission-denied')
+            throw isOffline(e as CodedError) ? new Error(OFFLINE) : e;
+          // A retry after a join whose reply was lost: the set is then an update, which rules
+          // refuse. If this phone is already a member (rules let only members read), it joined.
+          const mine = await online(getDoc(ref(shopId, 'devices', deviceId))).catch(() => null);
+          if (!mine?.exists() || (mine.data() as DeviceDoc).removed)
             throw new Error('invalid shop or join secret');
-          throw isOffline(e as CodedError) ? new Error(OFFLINE) : e;
         }
         return { deviceId };
       },
@@ -242,6 +246,23 @@ export function createFirebaseRepos(opts: { onWriteError?: (e: Error) => void } 
       },
       watchDevices: (shopId, cb) =>
         list(col(shopId, 'devices'), (id, d) => deviceFromDoc(id, d as DeviceDoc), cb),
+      // Rules stop a removed phone reading its own device doc, so the listener's permission error
+      // is the usual signal; a snapshot saying removed covers the moment before that.
+      watchMembership(shopId, deviceId, onLost) {
+        let fired = false;
+        const lost = () => {
+          if (fired) return;
+          fired = true;
+          onLost();
+        };
+        return onSnapshot(
+          ref(shopId, 'devices', deviceId),
+          (s) => {
+            if (s.exists() && (s.data() as DeviceDoc).removed) lost();
+          },
+          (e: CodedError) => (e.code === 'firestore/permission-denied' ? lost() : onError(e)),
+        );
+      },
       renameDevice: async (shopId, deviceId, name) =>
         update(ref(shopId, 'devices', deviceId), { displayName: name }),
       removeDevice: async (shopId, deviceId) =>
@@ -419,8 +440,9 @@ export function createFirebaseRepos(opts: { onWriteError?: (e: Error) => void } 
       },
       async finishCheck(shopId, categoryId, ids) {
         const r = ref(shopId, 'checks', categoryId);
-        const s = await readDoc(r);
-        const checked = s.exists() ? (s.data() as CheckSession).checked : {};
+        // Offline with nothing cached reads as "no session yet", not an error.
+        const s = await readDoc(r).catch(() => null);
+        const checked = s?.exists() ? (s.data() as CheckSession).checked : {};
         const complete = ids.every((id) => id in checked);
         if (complete) {
           const at = Date.now();

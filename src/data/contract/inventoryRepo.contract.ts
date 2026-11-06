@@ -329,6 +329,18 @@ export function runInventoryContract(make: () => Repos): void {
     await expect(inv().sellOne(shopId, 'x', 'ghost')).rejects.toThrow(/not a member/);
   });
 
+  it('watchMembership calls back once, when the phone is removed', async () => {
+    const { deviceId: d2 } = await r.shop.joinShop(shopId, joinSecret, 'Two');
+    const lost = jest.fn();
+    const un = r.shop.watchMembership(shopId, d2, lost);
+    await r.shop.renameDevice(shopId, d2, 'Two again');
+    expect(lost).not.toHaveBeenCalled();
+    await r.shop.removeDevice(shopId, d2, deviceId);
+    await r.shop.renameDevice(shopId, deviceId, 'Me again');
+    expect(lost).toHaveBeenCalledTimes(1);
+    un();
+  });
+
   it('saveIntake is atomic: an invalid later draft persists nothing', async () => {
     await expect(
       save(

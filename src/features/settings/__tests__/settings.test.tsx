@@ -1,4 +1,4 @@
-import { fireEvent, renderRouter, screen, waitFor, within } from 'expo-router/testing-library';
+import { act, fireEvent, renderRouter, screen, waitFor, within } from 'expo-router/testing-library';
 import { Linking } from 'react-native';
 import { createMemoryRepos } from '@/data/memory/createMemoryRepos';
 import type { Device, Shop } from '@/domain/types';
@@ -35,6 +35,7 @@ async function open(
       ),
       index: Settings,
       'settings/qr': SettingsQr,
+      'onboarding/index': () => null,
     },
     { initialUrl: '/' },
   );
@@ -201,6 +202,14 @@ describe('settings', () => {
       expect(r.getPathname()).toBe('/settings/qr');
       expect(shop().joinSecret).not.toBe(joinSecret);
     });
+  });
+
+  it('when another phone removes this one, it says so once, forgets the shop and goes to onboarding', async () => {
+    const { r, repos, shopId, deviceId, raviId } = await open();
+    await act(() => repos.shop.removeDevice(shopId, deviceId, raviId));
+    expect(await screen.findByText('This phone was removed from the shop.')).toBeOnTheScreen();
+    await waitFor(() => expect(r.getPathname()).toBe('/onboarding'));
+    expect(mockStore.has('session')).toBe(false);
   });
 
   it('renames this phone and updates the saved session', async () => {
