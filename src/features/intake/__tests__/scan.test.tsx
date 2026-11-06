@@ -1,8 +1,10 @@
+import { getDocumentAsync } from 'expo-document-picker';
 import { fireEvent, renderRouter, screen } from 'expo-router/testing-library';
 import { createMemoryRepos } from '@/data/memory/createMemoryRepos';
 import { AppShell } from '@/features/shared/AppShell';
 import { ToastProvider } from '@/features/shared/Toast';
 import type { OcrEngine, OcrLine } from '@/services/ocr/OcrEngine';
+import type { PdfRenderer } from '@/services/pdf/PdfRenderer';
 import { T } from '@/ui';
 import { useIntake } from '../IntakeContext';
 import { ScanScreen } from '../screens/ScanScreen';
@@ -27,6 +29,7 @@ jest.mock('expo-camera', () => {
     }),
   };
 });
+jest.mock('expo-document-picker', () => ({ getDocumentAsync: jest.fn() }));
 jest.mock('expo-image-picker', () => ({
   launchImageLibraryAsync: async () => ({
     canceled: false,
@@ -48,11 +51,29 @@ const GOOD: OcrLine[] = [
   ...row(130, 'Dolo', 'DL1', '03/28', '5'),
 ];
 
-async function start(lines: OcrLine[] | Error) {
+const PAGES: Record<string, OcrLine[]> = {
+  'page0.jpg': [
+    ...row(10, 'RAJ PHARMA'),
+    ...row(40, 'Bill No: INV-9'),
+    ...row(100, 'Crocin', 'CR45A', '08/27', '20'),
+  ],
+  'page1.jpg': row(30, 'Dolo', 'DL1', '03/28', '5'),
+};
+const pdfRenderer = (fail = false): PdfRenderer => ({
+  renderPages: async () => {
+    if (fail) throw new Error('bad pdf');
+    return {
+      pageCount: 2,
+      images: ['page0.jpg', 'page1.jpg'].map((uri) => ({ uri, width: 600, height: 1000 })),
+    };
+  },
+});
+
+async function start(lines: OcrLine[] | Error, renderer: PdfRenderer = pdfRenderer()) {
   const engine: OcrEngine = {
-    recognize: async () => {
+    recognize: async (uri) => {
       if (lines instanceof Error) throw lines;
-      return lines;
+      return PAGES[uri] ?? lines;
     },
   };
   const repos = createMemoryRepos(() => 1);
@@ -65,7 +86,7 @@ async function start(lines: OcrLine[] | Error) {
           <AppShell repos={repos} />
         </ToastProvider>
       ),
-      index: () => <ScanScreen engine={engine} />,
+      index: () => <ScanScreen engine={engine} renderer={renderer} />,
       'intake/review': ReviewStub,
       'intake/manual': () => <T>Manual stub</T>,
     },
@@ -81,39 +102,71 @@ beforeEach(() => {
 describe('scan screen', () => {
   it('captures, reads, and opens review with drafts and header', async () => {
     await start(GOOD);
-    await fireEvent.press(await screen.findByRole('button', { name: 'Capture' }));
+    await fireEvent.press(await screen.findByRole('button', { name: 'Camera' }));
     expect(await screen.findByText('Review stub: 2 from RAJ PHARMA #INV-9')).toBeOnTheScreen();
   });
 
   it('picks from gallery', async () => {
     await start(GOOD);
-    await fireEvent.press(await screen.findByRole('button', { name: 'Pick from gallery' }));
+    await fireEvent.press(await screen.findByRole('button', { name: 'Photo from gallery' }));
     expect(await screen.findByText(/Review stub: 2/)).toBeOnTheScreen();
   });
 
   it('shows a message and Retake when nothing is read', async () => {
     await start(row(10, 'blurry'));
-    await fireEvent.press(await screen.findByRole('button', { name: 'Capture' }));
+    await fireEvent.press(await screen.findByRole('button', { name: 'Camera' }));
     expect(
       await screen.findByText(
         "Couldn't read any medicines. Try again with better light, or type them.",
       ),
     ).toBeOnTheScreen();
     await fireEvent.press(screen.getByRole('button', { name: 'Retake' }));
-    expect(await screen.findByRole('button', { name: 'Capture' })).toBeOnTheScreen();
+    expect(await screen.findByRole('button', { name: 'Camera' })).toBeOnTheScreen();
   });
 
   it('still offers the gallery when the camera is denied', async () => {
     mockGranted = false;
     await start(GOOD);
     expect(await screen.findByText(/Camera permission is off/)).toBeOnTheScreen();
-    await fireEvent.press(screen.getByRole('button', { name: 'Pick from gallery' }));
+    await fireEvent.press(screen.getByRole('button', { name: 'Photo from gallery' }));
     expect(await screen.findByText(/Review stub: 2/)).toBeOnTheScreen();
   });
 
   it('distinguishes an engine failure from zero rows', async () => {
     await start(new Error('boom'));
-    await fireEvent.press(await screen.findByRole('button', { name: 'Capture' }));
+    await fireEvent.press(await screen.findByRole('button', { name: 'Camera' }));
     expect(await screen.findByText("Couldn't read the photo. Try again.")).toBeOnTheScreen();
+  });
+
+  describe('PDF', () => {
+    const pick = () =>
+      (getDocumentAsync as jest.Mock).mockResolvedValue({
+        canceled: false,
+        assets: [{ uri: 'file:///cache/bill.pdf' }],
+      });
+
+    it('reads every page and opens review with drafts from both', async () => {
+      pick();
+      await start(GOOD);
+      await fireEvent.press(await screen.findByRole('button', { name: 'PDF file' }));
+      expect(await screen.findByText('Review stub: 2 from RAJ PHARMA #INV-9')).toBeOnTheScreen();
+      expect(getDocumentAsync).toHaveBeenCalledWith(
+        expect.objectContaining({ type: 'application/pdf' }),
+      );
+    });
+
+    it("says so when the PDF can't be opened", async () => {
+      pick();
+      await start(GOOD, pdfRenderer(true));
+      await fireEvent.press(await screen.findByRole('button', { name: 'PDF file' }));
+      expect(await screen.findByText("Couldn't open this PDF.")).toBeOnTheScreen();
+    });
+
+    it('does nothing when the picker is cancelled', async () => {
+      (getDocumentAsync as jest.Mock).mockResolvedValue({ canceled: true, assets: null });
+      await start(GOOD);
+      await fireEvent.press(await screen.findByRole('button', { name: 'PDF file' }));
+      expect(await screen.findByRole('button', { name: 'PDF file' })).toBeOnTheScreen();
+    });
   });
 });
