@@ -9,7 +9,7 @@ import type {
   StockEvent,
 } from '@/domain/types';
 import { newId } from '@/lib/ids';
-import type { Repos, Unsub } from '../repositories';
+import type { CheckSession, Repos, Unsub } from '../repositories';
 import { planIntake } from '../shared/intake';
 import {
   CATEGORIES,
@@ -32,6 +32,7 @@ type ShopState = {
   batches: Batch[];
   bills: Bill[];
   events: StockEvent[];
+  checks: Record<string, CheckSession>;
 };
 
 export function createMemoryRepos(now: () => number = Date.now): Repos {
@@ -101,6 +102,7 @@ export function createMemoryRepos(now: () => number = Date.now): Repos {
           batches: [],
           bills: [],
           events: [],
+          checks: {},
         });
         notify();
         return { shopId, joinSecret, deviceId };
@@ -220,6 +222,30 @@ export function createMemoryRepos(now: () => number = Date.now): Repos {
         s.medicines.forEach((m) => m.categoryId === fromId && (m.categoryId = intoId));
         s.categories = s.categories.filter((c) => c.id !== fromId);
         notify();
+      },
+    },
+    check: {
+      watchCheck: (shopId, categoryId, cb) =>
+        watch(shopId, (s) => s.checks[categoryId] ?? null, cb),
+      markChecked: (shopId, categoryId, batchId, qty, deviceId) =>
+        write(shopId, deviceId, (s) => {
+          const at = now();
+          applyChange(s, setCountChange(batchOf(s, batchId), qty, 'checked', deviceId, at));
+          const c = (s.checks[categoryId] ??= { categoryId, startedAt: at, checked: {} });
+          c.checked[batchId] = { by: deviceId, at };
+        }),
+      async finishCheck(shopId, categoryId, ids) {
+        const s = get(shopId);
+        const checked = s.checks[categoryId]?.checked ?? {};
+        const complete = ids.every((id) => id in checked);
+        if (complete) {
+          const c = s.categories.find((x) => x.id === categoryId);
+          if (!c) throw new Error('category not found');
+          c.lastCheckedAt = now();
+          delete s.checks[categoryId];
+          notify();
+        }
+        return { complete };
       },
     },
   };

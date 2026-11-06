@@ -22,7 +22,7 @@ import {
 } from '@react-native-firebase/firestore';
 import type { Batch, Bill, Category, Company, Medicine, Shop, StockEvent } from '@/domain/types';
 import { newId } from '@/lib/ids';
-import type { Repos, Unsub } from '../repositories';
+import type { CheckSession, Repos, Unsub } from '../repositories';
 import { planIntake, resolveMedicine } from '../shared/intake';
 import {
   CATEGORIES,
@@ -128,6 +128,7 @@ export function createFirebaseRepos(opts: { onWriteError?: (e: Error) => void } 
     batchId: string,
     f: (b: Batch, at: number) => StockChange,
     patch: (c: StockChange) => DocumentData,
+    also?: (wb: WriteBatch, c: StockChange) => void,
   ) => {
     const r = ref(shopId, 'batches', batchId);
     const s = await readDoc(r);
@@ -136,6 +137,7 @@ export function createFirebaseRepos(opts: { onWriteError?: (e: Error) => void } 
     write((wb) => {
       wb.update(r, patch(c));
       wb.set(ref(shopId, 'events', c.event.id), withoutId(c.event));
+      also?.(wb, c);
     });
   };
   // Status is only written when it changes, so a stale 'active' never overwrites a return elsewhere.
@@ -346,6 +348,50 @@ export function createFirebaseRepos(opts: { onWriteError?: (e: Error) => void } 
         merge(shopId, 'companies', 'companyId', fromId, intoId),
       mergeCategories: (shopId, fromId, intoId) =>
         merge(shopId, 'categories', 'categoryId', fromId, intoId),
+    },
+    check: {
+      watchCheck: (shopId, categoryId, cb) =>
+        onSnapshot(
+          ref(shopId, 'checks', categoryId),
+          (s) => cb(s.exists() ? (s.data() as CheckSession) : null),
+          onError,
+        ),
+      async markChecked(shopId, categoryId, batchId, qty, deviceId) {
+        const r = ref(shopId, 'checks', categoryId);
+        const started = await getDocFromCache(r).then(
+          (s) => s.exists(),
+          () => false,
+        );
+        await change(
+          shopId,
+          batchId,
+          (b, at) => setCountChange(b, qty, 'checked', deviceId, at),
+          (c) => ({ qty: c.batch.qty, ...closed(c) }),
+          // Merge deep-merges `checked`, so two phones ticking offline keep both rows.
+          (wb, c) =>
+            wb.set(
+              r,
+              {
+                categoryId,
+                ...(started ? {} : { startedAt: c.event.at }),
+                checked: { [batchId]: { by: deviceId, at: c.event.at } },
+              },
+              { merge: true },
+            ),
+        );
+      },
+      async finishCheck(shopId, categoryId, ids) {
+        const r = ref(shopId, 'checks', categoryId);
+        const s = await readDoc(r);
+        const checked = s.exists() ? (s.data() as CheckSession).checked : {};
+        const complete = ids.every((id) => id in checked);
+        if (complete)
+          write((wb) => {
+            wb.update(ref(shopId, 'categories', categoryId), { lastCheckedAt: Date.now() });
+            wb.delete(r);
+          });
+        return { complete };
+      },
     },
   };
 }

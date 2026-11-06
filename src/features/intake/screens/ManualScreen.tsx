@@ -8,9 +8,12 @@ import { Button, ButtonRow, Screen, Skeleton } from '@/ui';
 import { ReviewCard } from '../components/ReviewCard';
 import { editDraft, useSaveDrafts } from '../IntakeContext';
 
-/** Type stock in by hand, one row at a time; `?medicineId=` starts from that medicine. */
+/** Type stock in by hand, one row at a time; `?medicineId=` starts from that medicine, `?categoryId=` presets the category. */
 export function ManualScreen() {
-  const { medicineId } = useLocalSearchParams<{ medicineId?: string }>();
+  const { medicineId, categoryId } = useLocalSearchParams<{
+    medicineId?: string;
+    categoryId?: string;
+  }>();
   const { medicines, loading } = useInventory();
   if (loading)
     return (
@@ -18,17 +21,24 @@ export function ManualScreen() {
         <Skeleton />
       </Screen>
     );
-  return <ManualForm medicine={medicines.find((m) => m.id === medicineId)} />;
+  return (
+    <ManualForm
+      medicine={medicines.find((m) => m.id === medicineId)}
+      categoryId={categoryId ?? null}
+    />
+  );
 }
 
-function ManualForm({ medicine }: { medicine?: Medicine }) {
+function ManualForm({ medicine, categoryId }: { medicine?: Medicine; categoryId: string | null }) {
   const { medicines, companies } = useInventory();
   const saveDrafts = useSaveDrafts();
   const toast = useToast();
   const edit = (d: DraftBatch, p: Parameters<typeof editDraft>[1]) =>
     editDraft(d, p, medicines, companies);
   const [draft, setDraft] = useState(() =>
-    medicine ? edit(emptyDraft('manual'), { medicineName: medicine.name }) : emptyDraft('manual'),
+    medicine
+      ? edit(emptyDraft('manual'), { medicineName: medicine.name })
+      : { ...emptyDraft('manual'), categoryId },
   );
   const [saving, setSaving] = useState(false);
   // A second tap can land before the disabled state renders; a double save doubles the stock.

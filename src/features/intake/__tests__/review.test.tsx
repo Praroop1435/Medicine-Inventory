@@ -360,6 +360,15 @@ describe('manual entry', () => {
     expect(screen.getByText('Cough syrups')).toBeOnTheScreen();
   });
 
+  it('presets the category from categoryId', async () => {
+    const s = await seed();
+    await renderRouter(routes(s.repos), {
+      initialUrl: `/intake/manual?categoryId=${s.cat('Vitamins')}`,
+    });
+    await fireEvent.changeText(await screen.findByLabelText('Medicine name'), 'Zincovit');
+    expect(screen.getByRole('button', { name: 'Vitamins' })).toBeSelected();
+  });
+
   it('Save & next saves one row and clears only name, batch, expiry and quantity', async () => {
     const s = await seed();
     const spy = jest.spyOn(s.repos.inventory, 'saveIntake');

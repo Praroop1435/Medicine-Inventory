@@ -1,6 +1,6 @@
 import { emptyDraft, type DraftBatch } from '@/domain/draft';
 import type { Batch, Bill, Category, Company, Medicine, StockEvent } from '@/domain/types';
-import type { Repos } from '../repositories';
+import type { CheckSession, Repos } from '../repositories';
 
 const last = <T>(w: (cb: (v: T) => void) => () => void): T => {
   let v: T | undefined;
@@ -227,5 +227,77 @@ export function runInventoryContract(make: () => Repos): void {
     await expect(inv().mergeCompanies(shopId, a.id, 'nope')).rejects.toThrow(/not found|same/);
     await expect(inv().mergeCategories(shopId, c.id, c.id)).rejects.toThrow(/not found|same/);
     await expect(inv().mergeCategories(shopId, 'nope', c.id)).rejects.toThrow(/not found|same/);
+  });
+
+  describe('check', () => {
+    const session = () => last<CheckSession | null>((cb) => r.check.watchCheck(shopId, catId, cb));
+    const category = () =>
+      last<Category[]>((cb) => inv().watchCategories(shopId, cb)).find((c) => c.id === catId)!;
+    const twoBatches = async () => {
+      await save([draft({ batchNo: 'B1', qty: 5 }), draft({ batchNo: 'B2', qty: 3 })]);
+      const bs = batches();
+      return bs.map((b) => b.id);
+    };
+
+    it('markChecked records the absolute count as a checked event and the row in the session', async () => {
+      const [b1, b2] = await twoBatches();
+      expect(session()).toBeNull();
+      await r.check.markChecked(shopId, catId, b1, 5, deviceId);
+      expect(events(meds()[0].id)[0]).toMatchObject({ type: 'checked', delta: 0, batchId: b1 });
+      expect(session()).toMatchObject({
+        categoryId: catId,
+        startedAt: expect.any(Number),
+        checked: { [b1]: { by: deviceId, at: expect.any(Number) } },
+      });
+      await r.check.markChecked(shopId, catId, b2, 1, deviceId);
+      expect(events(meds()[0].id)[0]).toMatchObject({ type: 'checked', delta: -2, batchId: b2 });
+      expect(batches().find((b) => b.id === b2)?.qty).toBe(1);
+      expect(Object.keys(session()!.checked).sort()).toEqual([b1, b2].sort());
+    });
+
+    it('markChecked with 0 closes the batch', async () => {
+      const [b1] = await twoBatches();
+      await r.check.markChecked(shopId, catId, b1, 0, deviceId);
+      expect(batches().map((b) => b.id)).not.toContain(b1);
+      expect(events(meds()[0].id)[0]).toMatchObject({ type: 'checked', delta: -5 });
+    });
+
+    it('a sale from another phone after the check applies on top of the counted qty', async () => {
+      const [b1] = await twoBatches();
+      const { deviceId: d2 } = await r.shop.joinShop(shopId, joinSecret, 'Two');
+      await r.check.markChecked(shopId, catId, b1, 4, deviceId);
+      await inv().sellOne(shopId, b1, d2);
+      expect(batches().find((b) => b.id === b1)?.qty).toBe(3);
+    });
+
+    it('finishCheck with every row checked sets lastCheckedAt and clears the session', async () => {
+      const ids = await twoBatches();
+      for (const id of ids) await r.check.markChecked(shopId, catId, id, 2, deviceId);
+      await expect(r.check.finishCheck(shopId, catId, ids)).resolves.toEqual({ complete: true });
+      expect(category().lastCheckedAt).toEqual(expect.any(Number));
+      expect(category().name).toBe('Antibiotics');
+      expect(session()).toBeNull();
+    });
+
+    it('finishCheck with rows unchecked keeps the session and lastCheckedAt', async () => {
+      const [b1, b2] = await twoBatches();
+      await r.check.markChecked(shopId, catId, b1, 5, deviceId);
+      await expect(r.check.finishCheck(shopId, catId, [b1, b2])).resolves.toEqual({
+        complete: false,
+      });
+      expect(category().lastCheckedAt).toBeNull();
+      expect(Object.keys(session()!.checked)).toEqual([b1]);
+    });
+
+    it('markChecked rejects for a non-member and an unknown batch', async () => {
+      const [b1] = await twoBatches();
+      await expect(r.check.markChecked(shopId, catId, b1, 1, 'ghost')).rejects.toThrow(
+        /not a member/,
+      );
+      await expect(r.check.markChecked(shopId, catId, 'nope', 1, deviceId)).rejects.toThrow(
+        /not found/,
+      );
+      expect(session()).toBeNull();
+    });
   });
 }

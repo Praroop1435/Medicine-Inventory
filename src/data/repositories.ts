@@ -68,8 +68,33 @@ export interface InventoryRepo {
   mergeCategories(shopId: string, fromId: string, intoId: string): Promise<void>;
 }
 
-// Task 16 adds `check: CheckRepo`.
+/** One category's stock check in progress; resumable from any phone. */
+export type CheckSession = {
+  categoryId: string;
+  startedAt: number;
+  checked: Record<string, { by: string; at: number }>; // batchId -> who ticked it, when
+};
+
+export interface CheckRepo {
+  watchCheck(shopId: string, categoryId: string, cb: (s: CheckSession | null) => void): Unsub;
+  /** setCount(…, 'checked') plus the row in the session, in one atomic write. */
+  markChecked(
+    shopId: string,
+    categoryId: string,
+    batchId: string,
+    qty: number,
+    deviceId: string,
+  ): Promise<void>;
+  /** Complete iff every id is checked: then sets lastCheckedAt and deletes the session. */
+  finishCheck(
+    shopId: string,
+    categoryId: string,
+    totalLiveBatchIds: string[],
+  ): Promise<{ complete: boolean }>;
+}
+
 export interface Repos {
   shop: ShopRepo;
   inventory: InventoryRepo;
+  check: CheckRepo;
 }
