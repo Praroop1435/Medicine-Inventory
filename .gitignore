@@ -1,2 +1,16 @@
+node_modules/
+.expo/
+dist/
+android/
+ios/
+.env
+.env.*
+!.env.example
+google-services.json
+*.keystore
+*.jks
+coverage/
+.DS_Store
 .superpowers/
 .taste-skill/
+firebase-debug.log
