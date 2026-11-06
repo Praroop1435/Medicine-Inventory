@@ -99,6 +99,20 @@ describe('membership', () => {
     await assertFails(updateDoc(doc(db('bob'), 'shops/s1/batches/b1'), { qty: increment(-1) }));
   });
 
+  it('device updates are limited to rename and remove; nobody un-removes a device', async () => {
+    const f = db('alice');
+    await assertSucceeds(updateDoc(doc(f, 'shops/s1/devices/gone'), { displayName: 'Renamed' }));
+    await assertSucceeds(updateDoc(doc(f, 'shops/s1/devices/alice'), { displayName: 'Me' }));
+    await assertFails(updateDoc(doc(f, 'shops/s1/devices/gone'), { removed: false }));
+    await assertFails(updateDoc(doc(f, 'shops/s1/devices/gone'), { joinedAt: 9 }));
+    await assertFails(updateDoc(doc(f, 'shops/s1/devices/gone'), { joinSecret: NEW_SECRET }));
+    await assertFails(updateDoc(doc(f, 'shops/s1/devices/alice'), { removed: 'yes' }));
+    await env.withSecurityRulesDisabled((ctx) =>
+      setDoc(doc(ctx.firestore(), 'shops/s1/devices/bob'), device(SECRET)),
+    );
+    await assertSucceeds(updateDoc(doc(f, 'shops/s1/devices/bob'), { removed: true }));
+  });
+
   it('events are append-only', async () => {
     const f = db('alice');
     await assertSucceeds(setDoc(doc(f, 'shops/s1/events/e2'), { batchId: 'b1', delta: -1 }));

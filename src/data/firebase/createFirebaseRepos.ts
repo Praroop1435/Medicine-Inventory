@@ -4,7 +4,9 @@ import {
   collection,
   doc,
   getDoc,
+  getDocFromCache,
   getDocs,
+  getDocsFromCache,
   increment,
   initializeFirestore,
   limit,
@@ -14,6 +16,7 @@ import {
   where,
   writeBatch,
   type DocumentData,
+  type DocumentReference,
   type Query,
   type WriteBatch,
 } from '@react-native-firebase/firestore';
@@ -66,6 +69,30 @@ function online<T>(p: Promise<T>, ms = 15_000): Promise<T> {
 // Offline-first (spec §5): reads use the default source (cache when offline), mutations
 // validate against that data, then commit a write batch WITHOUT awaiting the server.
 // Late failures go to onWriteError. Only createShop/joinShop wait for the server.
+const asMemberError = (e: unknown) =>
+  (e as CodedError).code === 'firestore/permission-denied' ? new Error('not a member') : e;
+
+// Mutations read cache-first: a default-source read waits for the server on a weak connection
+// and bills a read per doc. Fall back to the default read only when the cache has nothing.
+async function readDoc(r: DocumentReference) {
+  try {
+    const s = await getDocFromCache(r);
+    if (s.exists()) return s;
+  } catch {
+    // not cached
+  }
+  return getDoc(r).catch((e) => Promise.reject(asMemberError(e)));
+}
+async function readDocs(q: Query) {
+  try {
+    const s = await getDocsFromCache(q);
+    if (!s.empty) return s;
+  } catch {
+    // not cached
+  }
+  return getDocs(q).catch((e) => Promise.reject(asMemberError(e)));
+}
+
 export function createFirebaseRepos(opts: { onWriteError?: (e: Error) => void } = {}): Repos {
   const onWriteError = opts.onWriteError ?? ((e: Error) => console.warn('firestore write', e));
   const db = initializeFirestore(getApp(), {
@@ -87,11 +114,7 @@ export function createFirebaseRepos(opts: { onWriteError?: (e: Error) => void } 
   ): Unsub => onSnapshot(q, (s) => cb(s.docs.map((d) => map(d.id, d.data()))), onError);
 
   const commit = (wb: WriteBatch) =>
-    void wb
-      .commit()
-      .catch((e: CodedError) =>
-        onWriteError(e.code === 'firestore/permission-denied' ? new Error('not a member') : e),
-      );
+    void wb.commit().catch((e: unknown) => onWriteError(asMemberError(e) as Error));
   const write = (fill: (wb: WriteBatch) => void) => {
     const wb = writeBatch(db);
     fill(wb);
@@ -107,7 +130,7 @@ export function createFirebaseRepos(opts: { onWriteError?: (e: Error) => void } 
     patch: (c: StockChange) => DocumentData,
   ) => {
     const r = ref(shopId, 'batches', batchId);
-    const s = await getDoc(r);
+    const s = await readDoc(r);
     if (!s.exists()) throw new Error('batch not found');
     const c = f(batchFromDoc(s.id, s.data() as BatchDoc), Date.now());
     write((wb) => {
@@ -127,15 +150,15 @@ export function createFirebaseRepos(opts: { onWriteError?: (e: Error) => void } 
     intoId: string,
   ) => {
     const found = await Promise.all([
-      getDoc(ref(shopId, c, fromId)),
-      getDoc(ref(shopId, c, intoId)),
+      readDoc(ref(shopId, c, fromId)),
+      readDoc(ref(shopId, c, intoId)),
     ]);
     checkMerge(
       fromId,
       intoId,
       found.filter((s) => s.exists()).map((s) => ({ id: s.id })),
     );
-    const meds = await getDocs(query(col(shopId, 'medicines'), where(field, '==', fromId)));
+    const meds = await readDocs(query(col(shopId, 'medicines'), where(field, '==', fromId)));
     // shortcut: one batch caps at 500 writes; fine for a single company/category in a 2,000-medicine shop.
     write((wb) => {
       meds.docs.forEach((m) => wb.update(m.ref, { [field]: intoId }));
@@ -230,8 +253,8 @@ export function createFirebaseRepos(opts: { onWriteError?: (e: Error) => void } 
         ),
       async saveIntake(shopId, drafts, bill, deviceId) {
         const [medSnap, coSnap] = await Promise.all([
-          getDocs(col(shopId, 'medicines')),
-          getDocs(col(shopId, 'companies')),
+          readDocs(col(shopId, 'medicines')),
+          readDocs(col(shopId, 'companies')),
         ]);
         const medicines = medSnap.docs.map((d) => withId<Medicine>(d.id, d.data()));
         const companies = coSnap.docs.map((d) => withId<Company>(d.id, d.data()));
@@ -239,7 +262,7 @@ export function createFirebaseRepos(opts: { onWriteError?: (e: Error) => void } 
         const medIds = new Set(drafts.flatMap((d) => resolveMedicine(d, medicines)?.id ?? []));
         const found = await Promise.all(
           [...medIds].map((id) =>
-            getDocs(
+            readDocs(
               query(
                 col(shopId, 'batches'),
                 where('medicineId', '==', id),

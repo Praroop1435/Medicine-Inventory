@@ -37,8 +37,10 @@ service cloud.firestore {
           && deviceId == request.auth.uid
           && request.resource.data.removed == false
           && request.resource.data.joinSecret == getAfter(shopDoc(shopId)).data.joinSecret;
-        // Rename / remove. All phones are equal; a removed device is not a member, so it can't restore itself.
-        allow update: if isMember(shopId);
+        // Rename / remove only. All phones are equal, but nobody can un-remove a device.
+        allow update: if isMember(shopId)
+          && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['displayName', 'removed'])
+          && request.resource.data.removed in [resource.data.removed, true];
       }
 
       match /events/{eventId} {
