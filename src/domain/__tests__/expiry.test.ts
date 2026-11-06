@@ -15,6 +15,7 @@ describe('daysUntilExpiry', () => {
   it('counts calendar days', () => {
     expect(daysUntilExpiry({ year: 2026, month: 11 }, today)).toBe(24);
     expect(daysUntilExpiry({ year: 2026, month: 10 }, today)).toBeLessThan(0);
+    expect(daysUntilExpiry({ year: 2027, month: 1 }, new Date(2026, 11, 31))).toBe(31);
   });
 });
 
@@ -41,7 +42,7 @@ describe('parseExpiry', () => {
     'parses %s',
     (s) => expect(parseExpiry(s)).toEqual({ year: 2026, month: 11 }),
   );
-  it.each(['1126', '13/26', '00/26', '', 'abc'])('rejects %s', (s) =>
+  it.each(['1126', '13/26', '00/26', '', 'abc', '11/0026', '0026-11', '11/0000', '2026-13', '11/226', 'sept 26'])('rejects %s', (s) =>
     expect(parseExpiry(s)).toBeNull(),
   );
 });

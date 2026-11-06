@@ -23,7 +23,7 @@ export function batchStatus(ym: YearMonth, today: Date, alertDays: AlertDays): B
 
 const toYear = (s: string) => (s.length === 2 ? 2000 + Number(s) : Number(s));
 const valid = (year: number, month: number): YearMonth | null =>
-  month >= 1 && month <= 12 ? { year, month } : null;
+  month >= 1 && month <= 12 && year >= 2000 && year <= 2099 ? { year, month } : null;
 
 // `today` is unused: two-digit years always map to 20YY.
 export function parseExpiry(text: string, _today?: Date): YearMonth | null {
