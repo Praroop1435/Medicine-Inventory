@@ -7,6 +7,7 @@ import type { CheckSession } from '@/data/repositories';
 import { useSession } from '@/features/onboarding/SessionContext';
 import { useInventory } from '@/features/shared/hooks/useInventory';
 import { useToday } from '@/features/shared/hooks/useToday';
+import { daysSince } from '@/lib/format';
 import { AddSheet } from '@/features/shared/AddSheet';
 import {
   Button,
@@ -20,8 +21,6 @@ import {
   T,
   tokens,
 } from '@/ui';
-
-const DAY = 86_400_000;
 
 /** Check tab: top-level folders checked least recently first, with any check in progress. */
 export function CheckListScreen() {
@@ -56,7 +55,7 @@ export function CheckListScreen() {
     }
     if (lastCheckedAt === null)
       return { label: 'Never checked', pill: <StatusPill status="soon" label="Never checked" /> };
-    const days = Math.max(0, Math.floor((today.getTime() - lastCheckedAt) / DAY));
+    const days = daysSince(lastCheckedAt, today);
     const label = days === 0 ? 'Checked today' : `Checked ${days} day${days === 1 ? '' : 's'} ago`;
     return { label, pill: <StatusPill status="ok" label={label} /> };
   };

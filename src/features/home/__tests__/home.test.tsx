@@ -4,11 +4,13 @@ import { StyleSheet } from 'react-native';
 import { createMemoryRepos } from '@/data/memory/createMemoryRepos';
 import type { Repos } from '@/data/repositories';
 import { emptyDraft } from '@/domain/draft';
-import type { Category, Unit } from '@/domain/types';
+import type { Batch, Category, Medicine, Unit } from '@/domain/types';
 import { AppShell } from '@/features/shared/AppShell';
 import { ToastProvider } from '@/features/shared/Toast';
 import { tokens } from '@/ui';
 import { CategoryList } from '../components/CategoryList';
+import { dueFolder } from '../components/CheckReminder';
+import { daysSince } from '@/lib/format';
 import TabsLayout from '../../../../app/(tabs)/_layout';
 import Home from '../../../../app/(tabs)/index';
 import Alerts from '../../../../app/alerts/[status]';
@@ -248,6 +250,19 @@ describe('home', () => {
     expect(screen.queryByText('Eye/ear drops not checked')).toBeNull();
   });
 
+  it('when every stocked folder was checked today, says so instead of nudging', async () => {
+    const checked = Object.fromEntries(
+      ['Antibiotics', 'Pain relief', 'Cough syrups', 'Balms', 'Lotions', 'Vitamins', 'Others'].map(
+        (n) => [n, 0],
+      ),
+    );
+    // Never checked but empty: not due.
+    const { repos } = await seed({ checked: { ...checked, 'Eye/ear drops': null } });
+    await open(repos);
+    expect(await screen.findByText('All stock checked today ✓')).toBeOnTheScreen();
+    expect(screen.queryByRole('button', { name: 'Start check' })).toBeNull();
+  });
+
   it('first run: 0 / 0 / 0 in muted grey and an Add your first stock card instead of categories', async () => {
     const repos = createMemoryRepos();
     const { shopId, deviceId } = await repos.shop.createShop('Anand Medicals', 'Priya');
@@ -320,5 +335,32 @@ describe('home', () => {
     const push = jest.spyOn(router, 'push').mockImplementation(() => {});
     await fireEvent.press(await screen.findByRole('button', { name: 'See all' }));
     expect(push).toHaveBeenCalledWith('/stock');
+  });
+});
+
+describe('dueFolder', () => {
+  const cat = (id: string, order: number, lastCheckedAt: number | null): Category => ({
+    id,
+    name: id,
+    order,
+    lastCheckedAt,
+    parentId: null,
+  });
+  const med = (id: string, categoryId: string) => ({ id, categoryId }) as Medicine;
+  const batch = (medicineId: string) => ({ id: medicineId + 'b', medicineId }) as Batch;
+  it('never-checked first, then the oldest check, only folders with live stock', () => {
+    const cats = [cat('anti', 0, TODAY.getTime()), cat('cough', 1, null), cat('empty', 2, null)];
+    const meds = [med('a', 'anti'), med('c', 'cough')];
+    expect(dueFolder(cats, meds, [batch('a'), batch('c')])?.id).toBe('cough');
+    expect(dueFolder(cats, meds, [batch('a')])?.id).toBe('anti');
+    // A folder whose doc lacks the field counts as never checked.
+    const loose = { ...cat('loose', 3, null), lastCheckedAt: undefined } as unknown as Category;
+    expect(
+      dueFolder([cats[0], loose], [...meds, med('l', 'loose')], [batch('a'), batch('l')])?.id,
+    ).toBe('loose');
+  });
+  it('counts calendar days: yesterday afternoon is 1 day ago, not 0', () => {
+    expect(daysSince(new Date(2026, 10, 5, 15).getTime(), TODAY)).toBe(1);
+    expect(daysSince(new Date(2026, 10, 6, 9).getTime(), TODAY)).toBe(0);
   });
 });

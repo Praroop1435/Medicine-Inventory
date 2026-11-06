@@ -8,7 +8,7 @@ import { CategoryList } from '@/features/home/components/CategoryList';
 import { useInventory } from '@/features/shared/hooks/useInventory';
 import { useShop } from '@/features/shared/hooks/useShop';
 import { useToday } from '@/features/shared/hooks/useToday';
-import { medicineCount, pluralUnit } from '@/lib/format';
+import { daysSince, medicineCount, pluralUnit } from '@/lib/format';
 import {
   Button,
   ButtonRow,
@@ -25,8 +25,6 @@ import { View } from 'react-native';
 import { CategoryEditor } from '../components/CategoryEditor';
 import { CompanyChips } from '../components/CompanyChips';
 import { FolderMenu } from '../components/FolderMenu';
-
-const DAY = 86_400_000;
 
 export function CategoryScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
@@ -108,7 +106,7 @@ export function FolderScreen({ id }: { id: string | null }) {
     category.lastCheckedAt === null
       ? 'never checked'
       : (() => {
-          const d = Math.floor((today.getTime() - category.lastCheckedAt) / DAY);
+          const d = daysSince(category.lastCheckedAt, today);
           return d <= 0 ? 'checked today' : `checked ${d} day${d === 1 ? '' : 's'} ago`;
         })();
   const name = (cid: string) => companies.find((c) => c.id === cid)?.name ?? '';

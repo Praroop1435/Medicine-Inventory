@@ -26,3 +26,11 @@ export function expiresIn(days: number): string {
   if (days < 60) return `in ${days} day${days === 1 ? '' : 's'}`;
   return `in ${Math.round(days / 30)} months`;
 }
+
+/** Whole calendar days from the day of `at` to `today` (local midnight); 0 = today. */
+export const daysSince = (at: number, today: Date): number => {
+  const d = new Date(at);
+  const day = new Date(d.getFullYear(), d.getMonth(), d.getDate()).getTime();
+  // round, not floor: a DST day is 23 or 25 hours long.
+  return Math.max(0, Math.round((today.getTime() - day) / 86_400_000));
+};

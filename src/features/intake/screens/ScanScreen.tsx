@@ -69,8 +69,13 @@ export function ScanScreen({
     // freezes the Android display on the old frame. The camera comes back on refocus.
     router.push('/intake/review');
   };
+  // Each focus mounts a fresh camera: reusing the old preview after Back left its lower part black.
+  const [focusCount, setFocusCount] = useState(0);
   useFocusEffect(
-    useCallback(() => setPhase((p) => (p === 'reading' ? 'ready' : p)), []),
+    useCallback(() => {
+      setPhase((p) => (p === 'reading' ? 'ready' : p));
+      setFocusCount((n) => n + 1);
+    }, []),
   );
   // One capture/pick at a time: a second tap while the camera, picker or OCR is busy is ignored.
   const run = async (getUri: () => Promise<string | undefined>, pdf = false) => {
@@ -196,7 +201,15 @@ export function ScanScreen({
       }
     >
       {granted ? (
-        frame(<CameraView ref={camera} style={{ position: 'absolute', inset: 0 }} />, guide)
+        frame(
+          <CameraView
+            key={`camera-${focusCount}`}
+            testID={`camera-${focusCount}`}
+            ref={camera}
+            style={{ position: 'absolute', inset: 0 }}
+          />,
+          guide,
+        )
       ) : (
         <PermissionPrompt
           gate={gate}
