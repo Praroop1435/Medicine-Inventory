@@ -5,18 +5,17 @@ import {
   doc,
   getDoc,
   getDocs,
+  increment,
   initializeFirestore,
   limit,
   onSnapshot,
   orderBy,
   query,
-  runTransaction,
-  setDoc,
-  updateDoc,
   where,
   writeBatch,
   type DocumentData,
   type Query,
+  type WriteBatch,
 } from '@react-native-firebase/firestore';
 import type { Batch, Category, Company, Medicine, Shop, StockEvent } from '@/domain/types';
 import { newId } from '@/lib/ids';
@@ -48,14 +47,35 @@ import { colPath, docPath, shopPath, type ShopCollection } from './paths';
 // RNFirebase rejects with native errors carrying codes like 'firestore/permission-denied'.
 type CodedError = Error & { code?: string };
 
+const OFFLINE = 'No internet connection. Setting up or joining a shop needs the internet.';
+const isOffline = (e: CodedError) => /unavailable|network|deadline/.test(e.code ?? '');
+
+// Rejects when the server can't confirm in time; offline commits otherwise never settle.
+function online<T>(p: Promise<T>, ms = 15_000): Promise<T> {
+  let t: ReturnType<typeof setTimeout> | undefined;
+  const timeout = new Promise<never>(
+    (_, rej) => (t = setTimeout(() => rej(new Error(OFFLINE)), ms)),
+  );
+  return Promise.race([p, timeout]).finally(() => clearTimeout(t));
+}
+
 // Thin mapping onto Firestore: behaviour lives in ../shared. Membership is enforced by
 // firebase/firestore.rules (device doc id == anonymous uid), so the deviceId arguments
 // only label events.
-export function createFirebaseRepos(): Repos {
+//
+// Offline-first (spec §5): reads use the default source (cache when offline), mutations
+// validate against that data, then commit a write batch WITHOUT awaiting the server.
+// Late failures go to onWriteError. Only createShop/joinShop wait for the server.
+export function createFirebaseRepos(opts: { onWriteError?: (e: Error) => void } = {}): Repos {
+  const onWriteError = opts.onWriteError ?? ((e: Error) => console.warn('firestore write', e));
   const db = initializeFirestore(getApp(), {
     persistence: true,
     cacheSizeBytes: CACHE_SIZE_UNLIMITED,
   });
+  const signIn = () =>
+    online(ensureSignedIn()).catch((e: CodedError) => {
+      throw isOffline(e) ? new Error(OFFLINE) : e;
+    });
   const ref = (shopId: string, c: ShopCollection, id: string) => doc(db, docPath(shopId, c, id));
   const col = (shopId: string, c: ShopCollection) => collection(db, colPath(shopId, c));
   // shortcut: listener errors (e.g. after this phone is removed) are only logged; surface them in the UI if needed.
@@ -66,15 +86,38 @@ export function createFirebaseRepos(): Repos {
     cb: (v: T[]) => void,
   ): Unsub => onSnapshot(q, (s) => cb(s.docs.map((d) => map(d.id, d.data()))), onError);
 
-  const change = (shopId: string, batchId: string, f: (b: Batch, at: number) => StockChange) =>
-    runTransaction(db, async (tx) => {
-      const r = ref(shopId, 'batches', batchId);
-      const s = await tx.get(r);
-      if (!s.exists()) throw new Error('batch not found');
-      const c = f(batchFromDoc(s.id, s.data() as BatchDoc), Date.now());
-      tx.set(r, batchToDoc(c.batch));
-      tx.set(ref(shopId, 'events', c.event.id), withoutId(c.event));
+  const commit = (wb: WriteBatch) =>
+    void wb
+      .commit()
+      .catch((e: CodedError) =>
+        onWriteError(e.code === 'firestore/permission-denied' ? new Error('not a member') : e),
+      );
+  const write = (fill: (wb: WriteBatch) => void) => {
+    const wb = writeBatch(db);
+    fill(wb);
+    commit(wb);
+  };
+
+  // Validates with the shared change against the (possibly cached) batch, then writes only the
+  // fields that change. `patch` gets the result so qty can be an increment.
+  const change = async (
+    shopId: string,
+    batchId: string,
+    f: (b: Batch, at: number) => StockChange,
+    patch: (c: StockChange) => DocumentData,
+  ) => {
+    const r = ref(shopId, 'batches', batchId);
+    const s = await getDoc(r);
+    if (!s.exists()) throw new Error('batch not found');
+    const c = f(batchFromDoc(s.id, s.data() as BatchDoc), Date.now());
+    write((wb) => {
+      wb.update(r, patch(c));
+      wb.set(ref(shopId, 'events', c.event.id), withoutId(c.event));
     });
+  };
+  // Status is only written when it changes, so a stale 'active' never overwrites a return elsewhere.
+  const closed = (c: StockChange) =>
+    c.batch.status === 'active' ? {} : { status: c.batch.status };
 
   const merge = async (
     shopId: string,
@@ -94,16 +137,18 @@ export function createFirebaseRepos(): Repos {
     );
     const meds = await getDocs(query(col(shopId, 'medicines'), where(field, '==', fromId)));
     // shortcut: one batch caps at 500 writes; fine for a single company/category in a 2,000-medicine shop.
-    const wb = writeBatch(db);
-    meds.docs.forEach((m) => wb.update(m.ref, { [field]: intoId }));
-    wb.delete(ref(shopId, c, fromId));
-    await wb.commit();
+    write((wb) => {
+      meds.docs.forEach((m) => wb.update(m.ref, { [field]: intoId }));
+      wb.delete(ref(shopId, c, fromId));
+    });
   };
+  const update = (r: ReturnType<typeof ref>, data: DocumentData) =>
+    write((wb) => wb.update(r, data));
 
   return {
     shop: {
       async createShop(name, displayName) {
-        const deviceId = await ensureSignedIn();
+        const deviceId = await signIn();
         const shopId = newId();
         const joinSecret = newJoinSecret();
         const wb = writeBatch(db);
@@ -118,18 +163,25 @@ export function createFirebaseRepos(): Repos {
         CATEGORIES.forEach((n, order) =>
           wb.set(ref(shopId, 'categories', newId()), { name: n, order, lastCheckedAt: null }),
         );
-        await wb.commit();
+        try {
+          await online(wb.commit());
+        } catch (e) {
+          throw isOffline(e as CodedError) ? new Error(OFFLINE) : e;
+        }
         return { shopId, joinSecret, deviceId };
       },
       async joinShop(shopId, joinSecret, displayName) {
-        const deviceId = await ensureSignedIn();
+        const deviceId = await signIn();
         const device: DeviceDoc = { displayName, joinedAt: Date.now(), removed: false, joinSecret };
+        const wb = writeBatch(db);
+        wb.set(ref(shopId, 'devices', deviceId), device);
         try {
-          await setDoc(ref(shopId, 'devices', deviceId), device);
+          await online(wb.commit());
         } catch (e) {
-          if ((e as CodedError).code === 'firestore/permission-denied')
+          const code = (e as CodedError).code;
+          if (code === 'firestore/permission-denied')
             throw new Error('invalid shop or join secret');
-          throw e;
+          throw isOffline(e as CodedError) ? new Error(OFFLINE) : e;
         }
         return { deviceId };
       },
@@ -141,16 +193,16 @@ export function createFirebaseRepos(): Repos {
           },
           onError,
         ),
-      updateShop: (shopId, patch) => updateDoc(doc(db, shopPath(shopId)), patch),
+      updateShop: async (shopId, patch) => update(doc(db, shopPath(shopId)), patch),
       watchDevices: (shopId, cb) =>
         list(col(shopId, 'devices'), (id, d) => deviceFromDoc(id, d as DeviceDoc), cb),
-      renameDevice: (shopId, deviceId, name) =>
-        updateDoc(ref(shopId, 'devices', deviceId), { displayName: name }),
-      removeDevice: (shopId, deviceId) =>
-        updateDoc(ref(shopId, 'devices', deviceId), { removed: true }),
+      renameDevice: async (shopId, deviceId, name) =>
+        update(ref(shopId, 'devices', deviceId), { displayName: name }),
+      removeDevice: async (shopId, deviceId) =>
+        update(ref(shopId, 'devices', deviceId), { removed: true }),
       async rotateJoinSecret(shopId) {
         const next = newJoinSecret();
-        await updateDoc(doc(db, shopPath(shopId)), { joinSecret: next });
+        update(doc(db, shopPath(shopId)), { joinSecret: next });
         return next;
       },
     },
@@ -177,14 +229,13 @@ export function createFirebaseRepos(): Repos {
           cb,
         ),
       async saveIntake(shopId, drafts, bill, deviceId) {
-        // Transactions can only read documents, not queries: find candidate batches first,
-        // then re-read them inside the transaction so the duplicate guard sees fresh qty/status.
         const [medSnap, coSnap] = await Promise.all([
           getDocs(col(shopId, 'medicines')),
           getDocs(col(shopId, 'companies')),
         ]);
         const medicines = medSnap.docs.map((d) => withId<Medicine>(d.id, d.data()));
         const companies = coSnap.docs.map((d) => withId<Company>(d.id, d.data()));
+        // Only batches of medicines the drafts resolve to can be duplicates.
         const medIds = new Set(drafts.flatMap((d) => resolveMedicine(d, medicines)?.id ?? []));
         const found = await Promise.all(
           [...medIds].map((id) =>
@@ -197,39 +248,53 @@ export function createFirebaseRepos(): Repos {
             ),
           ),
         );
-        const candidates = found.flatMap((s) => s.docs.map((d) => d.ref));
-        await runTransaction(db, async (tx) => {
-          const fresh = await Promise.all(candidates.map((r) => tx.get(r)));
-          const batches = fresh
-            .filter((s) => s.exists())
-            .map((s) => batchFromDoc(s.id, s.data() as BatchDoc));
-          const p = planIntake(
-            { medicines, companies, batches },
-            drafts,
-            bill,
-            deviceId,
-            Date.now(),
-          );
-          if (p.bill) tx.set(ref(shopId, 'bills', p.bill.id), withoutId(p.bill));
-          p.companies.forEach((c) => tx.set(ref(shopId, 'companies', c.id), withoutId(c)));
-          p.medicines.forEach((m) => tx.set(ref(shopId, 'medicines', m.id), withoutId(m)));
-          p.batches.forEach((b) => tx.set(ref(shopId, 'batches', b.id), batchToDoc(b)));
-          p.events.forEach((e) => tx.set(ref(shopId, 'events', e.id), withoutId(e)));
+        const batches = found.flatMap((s) =>
+          s.docs.map((d) => batchFromDoc(d.id, d.data() as BatchDoc)),
+        );
+        const oldQty = new Map(batches.map((b) => [b.id, b.qty]));
+        const p = planIntake({ medicines, companies, batches }, drafts, bill, deviceId, Date.now());
+        write((wb) => {
+          if (p.bill) wb.set(ref(shopId, 'bills', p.bill.id), withoutId(p.bill));
+          p.companies.forEach((c) => wb.set(ref(shopId, 'companies', c.id), withoutId(c)));
+          p.medicines.forEach((m) => wb.set(ref(shopId, 'medicines', m.id), withoutId(m)));
+          p.batches.forEach((b) => {
+            const old = oldQty.get(b.id);
+            // Existing batch: increment so a concurrent sale on another phone isn't overwritten.
+            if (old === undefined) wb.set(ref(shopId, 'batches', b.id), batchToDoc(b));
+            else wb.update(ref(shopId, 'batches', b.id), { qty: increment(b.qty - old) });
+          });
+          p.events.forEach((e) => wb.set(ref(shopId, 'events', e.id), withoutId(e)));
         });
       },
       sellOne: (shopId, batchId, deviceId) =>
-        change(shopId, batchId, (b, at) => sellOneChange(b, deviceId, at)),
+        change(
+          shopId,
+          batchId,
+          (b, at) => sellOneChange(b, deviceId, at),
+          (c) => ({ qty: increment(-1), ...closed(c) }),
+        ),
+      // Absolute qty: the shelf count is the truth.
       setCount: (shopId, batchId, qty, deviceId, type) =>
-        change(shopId, batchId, (b, at) => setCountChange(b, qty, type, deviceId, at)),
+        change(
+          shopId,
+          batchId,
+          (b, at) => setCountChange(b, qty, type, deviceId, at),
+          (c) => ({ qty: c.batch.qty, ...closed(c) }),
+        ),
       markReturned: (shopId, batchId, deviceId) =>
-        change(shopId, batchId, (b, at) => returnChange(b, deviceId, at)),
+        change(
+          shopId,
+          batchId,
+          (b, at) => returnChange(b, deviceId, at),
+          (c) => closed(c),
+        ),
       async upsertCategory(shopId, c) {
         const id = c.id ?? newId();
-        await setDoc(ref(shopId, 'categories', id), withoutId({ ...c, id }));
+        write((wb) => wb.set(ref(shopId, 'categories', id), withoutId({ ...c, id })));
         return id;
       },
-      renameCompany: (shopId, companyId, name) =>
-        updateDoc(ref(shopId, 'companies', companyId), { name: name.trim() }),
+      renameCompany: async (shopId, companyId, name) =>
+        update(ref(shopId, 'companies', companyId), { name: name.trim() }),
       mergeCompanies: (shopId, fromId, intoId) =>
         merge(shopId, 'companies', 'companyId', fromId, intoId),
       mergeCategories: (shopId, fromId, intoId) =>

@@ -8,6 +8,7 @@ import {
   deleteDoc,
   doc,
   getDoc,
+  increment,
   setDoc,
   setLogLevel,
   updateDoc,
@@ -85,6 +86,17 @@ describe('membership', () => {
     await assertFails(deleteDoc(doc(f, 'shops/s1/devices/gone')));
     await assertFails(deleteDoc(doc(f, 'shops/s1')));
     await assertFails(setDoc(doc(f, 'shops/s1/devices/fake'), device(SECRET)));
+  });
+
+  it('batch qty must stay an integer; increments are allowed, deletes are not', async () => {
+    const f = db('alice');
+    await assertSucceeds(updateDoc(doc(f, 'shops/s1/batches/b1'), { qty: increment(-1) }));
+    await assertSucceeds(updateDoc(doc(f, 'shops/s1/batches/b1'), { qty: increment(-5) }));
+    await assertFails(updateDoc(doc(f, 'shops/s1/batches/b1'), { qty: 1.5 }));
+    await assertFails(updateDoc(doc(f, 'shops/s1/batches/b1'), { qty: increment(0.5) }));
+    await assertFails(setDoc(doc(f, 'shops/s1/batches/b3'), { ...batch, qty: '3' }));
+    await assertFails(deleteDoc(doc(f, 'shops/s1/batches/b1')));
+    await assertFails(updateDoc(doc(db('bob'), 'shops/s1/batches/b1'), { qty: increment(-1) }));
   });
 
   it('events are append-only', async () => {
