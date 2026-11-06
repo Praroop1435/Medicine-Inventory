@@ -2,7 +2,7 @@ import { act, fireEvent, render, screen } from '@testing-library/react-native';
 import { Pressable, StyleSheet, Text } from 'react-native';
 import { SafeAreaInsetsContext } from 'react-native-safe-area-context';
 import { tokens } from '@/ui';
-import { ToastProvider, useToast } from '../Toast';
+import { errorCopy, ToastProvider, useToast } from '../Toast';
 
 function Trigger() {
   const toast = useToast();
@@ -41,4 +41,33 @@ it('sits above the tab bar and docked footers, plus the bottom inset', async () 
   expect(StyleSheet.flatten(screen.getByTestId('toast').props.style).bottom).toBe(
     24 + tokens.toastOffset,
   );
+});
+
+describe('errorCopy', () => {
+  const FALLBACK = "Couldn't save. Check the connection and try again.";
+  it.each([
+    [new Error('device is not a member of this shop'), 'This phone was removed from the shop.'],
+    [
+      Object.assign(
+        new Error('[firestore/permission-denied] Missing or insufficient permissions.'),
+        {
+          code: 'firestore/permission-denied',
+        },
+      ),
+      'This phone was removed from the shop.',
+    ],
+    [
+      Object.assign(new Error('The service is currently unavailable.'), {
+        code: 'firestore/unavailable',
+      }),
+      'No internet. Your change is saved on this phone and will sync.',
+    ],
+    [
+      new TypeError('Network request failed'),
+      'No internet. Your change is saved on this phone and will sync.',
+    ],
+    [new Error('cannot read property x of undefined'), FALLBACK],
+    ['a string', FALLBACK],
+    [null, FALLBACK],
+  ])('%p → %p', (e, copy) => expect(errorCopy(e, FALLBACK)).toBe(copy));
 });

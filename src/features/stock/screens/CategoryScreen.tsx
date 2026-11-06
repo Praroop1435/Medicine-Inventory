@@ -137,7 +137,7 @@ export function FolderScreen({ id }: { id: string | null }) {
         subtitle={sub}
         right={s.worst && label ? <StatusPill status={s.worst} label={label} /> : null}
         chevron
-        onPress={() => router.push(`/medicine/${m.id}`)}
+        onPress={() => router.push(`/medicine/${m.id}?from=folder`)}
       />
     );
   };

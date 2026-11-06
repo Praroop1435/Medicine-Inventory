@@ -8,7 +8,7 @@ import { useRepos } from '@/data/RepoContext';
 import { useSession } from '@/features/onboarding/SessionContext';
 import { useShop } from '@/features/shared/hooks/useShop';
 import { useToday } from '@/features/shared/hooks/useToday';
-import { useToast } from '@/features/shared/Toast';
+import { errorCopy, useToast } from '@/features/shared/Toast';
 import { useInventory } from '@/features/shared/hooks/useInventory';
 import { CategoryEditor } from '@/features/stock/components/CategoryEditor';
 import { Button, ButtonRow, Card, Field, IconButton, KeyValueRow, Select, T, tokens } from '@/ui';
@@ -82,7 +82,7 @@ export function ReviewCard({
       onChange({ unit: newUnit.trim().toLowerCase() });
       setNewUnit(null);
     } catch (e) {
-      toast(e instanceof Error ? e.message : "Couldn't save. Check the connection and try again.");
+      toast(errorCopy(e, "Couldn't save. Check the connection and try again."));
     }
   };
   const issues = draftIssues(d);

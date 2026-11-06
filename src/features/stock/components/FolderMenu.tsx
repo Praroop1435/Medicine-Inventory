@@ -5,7 +5,7 @@ import { childrenOf, descendantIds, pathLabel, walk } from '@/domain/tree';
 import type { Category } from '@/domain/types';
 import { useSession } from '@/features/onboarding/SessionContext';
 import { useInventory } from '@/features/shared/hooks/useInventory';
-import { useToast } from '@/features/shared/Toast';
+import { errorCopy, useToast } from '@/features/shared/Toast';
 import { ConfirmDialog, ListRow, Sheet } from '@/ui';
 import { CategoryEditor } from './CategoryEditor';
 
@@ -21,7 +21,7 @@ export function FolderMenu({ folder, onClose }: { folder: Category; onClose: () 
   const run = (p: Promise<void>) => {
     onClose();
     p.catch((e: unknown) =>
-      toast(e instanceof Error ? e.message : "Couldn't save. Check the connection and try again."),
+      toast(errorCopy(e, "Couldn't save. Check the connection and try again.")),
     );
   };
   const empty =

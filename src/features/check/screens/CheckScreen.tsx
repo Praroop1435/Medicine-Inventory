@@ -10,7 +10,7 @@ import { useSession } from '@/features/onboarding/SessionContext';
 import { useInventory } from '@/features/shared/hooks/useInventory';
 import { useShop } from '@/features/shared/hooks/useShop';
 import { useToday } from '@/features/shared/hooks/useToday';
-import { useToast } from '@/features/shared/Toast';
+import { errorCopy, useToast } from '@/features/shared/Toast';
 import {
   Button,
   ButtonRow,
@@ -106,10 +106,7 @@ export function CheckScreen() {
   const mark = (b: Batch) =>
     check.markChecked(shopId, category.id, b.id, edits[b.id] ?? b.qty, deviceId).then(
       () => setEdits((e) => Object.fromEntries(Object.entries(e).filter(([k]) => k !== b.id))),
-      (e: unknown) =>
-        toast(
-          e instanceof Error ? e.message : "Couldn't save. Check the connection and try again.",
-        ),
+      (e: unknown) => toast(errorCopy(e, "Couldn't save. Check the connection and try again.")),
     );
 
   const finish = async () => {
@@ -124,7 +121,7 @@ export function CheckScreen() {
       toast(complete ? `${category.name} checked` : `Saved progress · ${done} of ${total} checked`);
       router.back();
     } catch (e) {
-      toast(e instanceof Error ? e.message : "Couldn't finish the check. Try again.");
+      toast(errorCopy(e, "Couldn't finish the check. Try again."));
     } finally {
       finishing.current = false;
     }

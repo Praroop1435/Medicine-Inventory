@@ -4,7 +4,7 @@ import { View } from 'react-native';
 import QRCode from 'react-native-qrcode-svg';
 import { captureRef } from 'react-native-view-shot';
 import { useShop } from '@/features/shared/hooks/useShop';
-import { useToast } from '@/features/shared/Toast';
+import { errorCopy, useToast } from '@/features/shared/Toast';
 import { Button, ButtonRow, Card, Screen, T, tokens } from '@/ui';
 import { resetTo } from '../resetTo';
 import { toQrPayload } from '../qr';
@@ -20,7 +20,7 @@ export function QrScreen({ again }: { again?: boolean }) {
       const uri = await captureRef(qrRef, { format: 'png' });
       await Sharing.shareAsync(uri, { mimeType: 'image/png', dialogTitle: 'Save shop QR' });
     } catch (e) {
-      toast(`Couldn't save the QR: ${(e as Error).message}`);
+      toast(errorCopy(e, "Couldn't save the QR. Try again."));
     }
   };
 

@@ -5,7 +5,7 @@ import { nextOrder } from '@/domain/tree';
 import type { Category } from '@/domain/types';
 import { useSession } from '@/features/onboarding/SessionContext';
 import { useInventory } from '@/features/shared/hooks/useInventory';
-import { useToast } from '@/features/shared/Toast';
+import { errorCopy, useToast } from '@/features/shared/Toast';
 import { Button, ButtonRow, Field, tokens } from '@/ui';
 
 /** Inline folder name form: renames `folder`, or adds a new folder last under `parentId`. */
@@ -41,7 +41,7 @@ export function CategoryEditor({
         }),
       );
     } catch (e) {
-      toast(e instanceof Error ? e.message : "Couldn't save. Check the connection and try again.");
+      toast(errorCopy(e, "Couldn't save. Check the connection and try again."));
     }
   };
   return (

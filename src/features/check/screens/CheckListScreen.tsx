@@ -42,17 +42,24 @@ export function CheckListScreen() {
     return () => unsubs.forEach((u) => u());
   }, [check, shopId, ids]);
 
-  // Partly checked is in progress (teal); never checked wants attention (amber); the rest is quiet.
+  const liveIn = (id: string) => {
+    const scope = new Set([id, ...descendantIds(categories, id)]);
+    return batches.filter((b) =>
+      scope.has(medicines.find((m) => m.id === b.medicineId)?.categoryId ?? ''),
+    );
+  };
+  const stocked = new Set(top.filter((c) => liveIn(c.id).length).map((c) => c.id));
+  // Partly checked is in progress (teal); never checked wants attention (amber); an empty folder
+  // has nothing to count, so it is quiet; the rest is quiet too.
   const state = (id: string, lastCheckedAt: number | null) => {
     const s = sessions[id];
     if (s) {
-      const scope = new Set([id, ...descendantIds(categories, id)]);
-      const live = batches.filter((b) =>
-        scope.has(medicines.find((m) => m.id === b.medicineId)?.categoryId ?? ''),
-      );
+      const live = liveIn(id);
       const label = `Partly checked · ${live.filter((b) => s.checked[b.id]).length} of ${live.length}`;
       return { label, pill: <Pill tone="accent" label={label} /> };
     }
+    if (!stocked.has(id))
+      return { label: 'No stock', pill: <StatusPill status="ok" label="No stock" /> };
     if (lastCheckedAt === null)
       return { label: 'Never checked', pill: <StatusPill status="soon" label="Never checked" /> };
     const days = daysSince(lastCheckedAt, today);
@@ -79,9 +86,12 @@ export function CheckListScreen() {
           </T>
           <Card>
             {top
-              // null (never checked) sorts before any timestamp.
+              // Folders with stock first; null (never checked) sorts before any timestamp.
               .sort(
-                (a, b) => (a.lastCheckedAt ?? -1) - (b.lastCheckedAt ?? -1) || a.order - b.order,
+                (a, b) =>
+                  Number(stocked.has(b.id)) - Number(stocked.has(a.id)) ||
+                  (a.lastCheckedAt ?? -1) - (b.lastCheckedAt ?? -1) ||
+                  a.order - b.order,
               )
               .map((c) => {
                 const st = state(c.id, c.lastCheckedAt);

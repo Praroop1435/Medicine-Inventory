@@ -10,14 +10,15 @@ import { useSession } from '@/features/onboarding/SessionContext';
 import { useInventory } from '@/features/shared/hooks/useInventory';
 import { useShop } from '@/features/shared/hooks/useShop';
 import { useToday } from '@/features/shared/hooks/useToday';
-import { useToast } from '@/features/shared/Toast';
+import { errorCopy, useToast } from '@/features/shared/Toast';
 import { CountStrip, EmptyState, Screen, SectionHeader, Skeleton, tokens } from '@/ui';
 import { useBills } from '../hooks/useBills';
 import { BatchCard } from '../components/BatchCard';
 import { HistoryList } from '../components/HistoryList';
 
 export function MedicineScreen() {
-  const { id } = useLocalSearchParams<{ id: string }>();
+  // `from=folder` when opened from that medicine's folder; anywhere else Back just says Back.
+  const { id, from } = useLocalSearchParams<{ id: string; from?: string }>();
   const { categories, medicines, batches, companies, loading } = useInventory();
   const { inventory, shop: shopRepo } = useRepos();
   const session = useSession().session;
@@ -47,13 +48,13 @@ export function MedicineScreen() {
   const med = medicines.find((m) => m.id === id);
   if (loading || !shop || !shopId || !deviceId)
     return (
-      <Screen back="Stock">
+      <Screen back="Back">
         <Skeleton />
       </Screen>
     );
   if (!med)
     return (
-      <Screen back="Stock">
+      <Screen back="Back">
         <EmptyState title="Medicine not found" />
       </Screen>
     );
@@ -67,10 +68,7 @@ export function MedicineScreen() {
   const act = (f: Promise<void>, ok?: string) =>
     f.then(
       () => void (ok && toast(ok)),
-      (e: unknown) =>
-        toast(
-          e instanceof Error ? e.message : "Couldn't save. Check the connection and try again.",
-        ),
+      (e: unknown) => toast(errorCopy(e, "Couldn't save. Check the connection and try again.")),
     );
 
   return (
@@ -83,7 +81,7 @@ export function MedicineScreen() {
       ]
         .filter(Boolean)
         .join(' · ')}
-      back={categories.find((c) => c.id === med.categoryId)?.name ?? 'Stock'}
+      back={(from === 'folder' && categories.find((c) => c.id === med.categoryId)?.name) || 'Back'}
     >
       <CountStrip
         items={[

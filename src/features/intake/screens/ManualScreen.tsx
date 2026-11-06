@@ -3,7 +3,7 @@ import { useRef, useState } from 'react';
 import { canSave, confirmField, emptyDraft, type DraftBatch } from '@/domain/draft';
 import type { Medicine } from '@/domain/types';
 import { useInventory } from '@/features/shared/hooks/useInventory';
-import { useToast } from '@/features/shared/Toast';
+import { errorCopy, useToast } from '@/features/shared/Toast';
 import { Button, ButtonRow, Screen, Skeleton } from '@/ui';
 import { ReviewCard } from '../components/ReviewCard';
 import { editDraft, useSaveDrafts } from '../IntakeContext';
@@ -55,7 +55,7 @@ function ManualForm({ medicine, categoryId }: { medicine?: Medicine; categoryId:
       const { companyName, categoryId, unit } = draft;
       setDraft({ ...emptyDraft('manual'), companyName, categoryId, unit });
     } catch (e) {
-      toast(e instanceof Error ? e.message : "Couldn't save. Check the connection and try again.");
+      toast(errorCopy(e, "Couldn't save. Check the connection and try again."));
     } finally {
       inFlight.current = false;
       setSaving(false);

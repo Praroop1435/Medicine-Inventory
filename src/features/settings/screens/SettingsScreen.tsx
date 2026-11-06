@@ -8,7 +8,7 @@ import { useSession } from '@/features/onboarding/SessionContext';
 import { useShop } from '@/features/shared/hooks/useShop';
 import { useNotifier } from '@/features/shared/NotifierContext';
 import { usePermissionStatus } from '@/features/shared/PermissionGate';
-import { useToast } from '@/features/shared/Toast';
+import { errorCopy, useToast } from '@/features/shared/Toast';
 import { noUpdater, type Updater } from '@/services/updates/Updater';
 import {
   Button,
@@ -60,7 +60,7 @@ function Reminders({ shop }: { shop: Shop }) {
       );
       toast('Reminders saved');
     } catch (err) {
-      toast(`Couldn't save: ${(err as Error).message}`);
+      toast(errorCopy(err, "Couldn't save. Check the connection and try again."));
     }
   };
 
@@ -106,7 +106,8 @@ export function SettingsScreen({ updater = noUpdater }: { updater?: Updater }) {
     [shopRepo, shopId],
   );
 
-  const fail = (e: unknown) => toast(`Couldn't save: ${(e as Error).message}`);
+  const fail = (e: unknown) =>
+    toast(errorCopy(e, "Couldn't save. Check the connection and try again."));
   const turnOn = async () => {
     if (await notifier.requestPermission().catch(() => false)) notifications.setStatus('granted');
     else void Linking.openSettings();

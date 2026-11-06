@@ -339,12 +339,13 @@ describe('check tab', () => {
     const names = (await screen.findAllByRole('button', { name: /, / })).map(
       (n) => n.props.accessibilityLabel as string,
     );
+    // Folders with nothing to count go last, whenever they were checked.
     expect(names.slice(0, 3)).toEqual([
       'Antibiotics, Partly checked · 1 of 4',
       'Pain relief, Checked 3 days ago',
-      'Cough syrups, Checked 1 day ago',
+      'Cough syrups, No stock',
     ]);
-    expect(names).toContain('Balms, Checked today');
+    expect(names).toContain('Balms, No stock');
     expect(screen.getByText("Count what's on the shelf. Oldest checks first.")).toBeOnTheScreen();
     // Partly checked is teal (in progress), checked is muted: neither is an expiry colour.
     const pill = within(screen.getByRole('button', { name: /^Antibiotics,/ })).getByText(
@@ -361,13 +362,25 @@ describe('check tab', () => {
     expect(push).toHaveBeenCalledWith(`/check/${s.cat('Pain relief').id}`);
   });
 
-  it('says never checked, amber', async () => {
+  it('says never checked, amber, and a folder with no stock is muted and last', async () => {
     const s = await seed();
     await renderRouter(routes(s.repos), { initialUrl: '/check' });
-    const row = await screen.findByRole('button', { name: 'Balms, Never checked' });
+    const row = await screen.findByRole('button', { name: 'Pain relief, Never checked' });
     expect(StyleSheet.flatten(within(row).getByText('Never checked').props.style).color).toBe(
       tokens.color.soon,
     );
+    const empty = screen.getByRole('button', { name: 'Balms, No stock' });
+    expect(StyleSheet.flatten(within(empty).getByText('No stock').props.style).color).toBe(
+      tokens.color.muted,
+    );
+    expect(screen.queryByRole('button', { name: 'Balms, Never checked' })).toBeNull();
+    const names = screen
+      .getAllByRole('button', { name: /, / })
+      .map((n) => n.props.accessibilityLabel as string);
+    expect(names.slice(0, 2)).toEqual([
+      'Antibiotics, Partly checked · 1 of 4',
+      'Pain relief, Never checked',
+    ]);
   });
 
   it('with no live stock anywhere, says nothing to check yet and offers Add stock', async () => {

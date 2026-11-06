@@ -6,7 +6,7 @@ import type { DraftBatch } from '@/domain/draft';
 import { shopUnits } from '@/domain/types';
 import { useShop } from '@/features/shared/hooks/useShop';
 import { useInventory } from '@/features/shared/hooks/useInventory';
-import { useToast } from '@/features/shared/Toast';
+import { errorCopy, useToast } from '@/features/shared/Toast';
 import { parseSheetRows, type SheetError } from '@/services/bulk/sheetParser';
 import { readSheetFile, shareTemplate } from '@/services/bulk/template';
 import { Button, ButtonRow, Card, IconTile, ListRow, Screen, T, tokens } from '@/ui';
@@ -36,11 +36,7 @@ export function BulkScreen() {
       else if (parsed.drafts.length) review(parsed.drafts);
       else toast('No rows found in that file');
     } catch (e) {
-      toast(
-        e instanceof Error
-          ? e.message
-          : "Couldn't read that file. Save it as .xlsx or .csv and try again.",
-      );
+      toast(errorCopy(e, "Couldn't read that file. Save it as .xlsx or .csv and try again."));
     }
   };
 

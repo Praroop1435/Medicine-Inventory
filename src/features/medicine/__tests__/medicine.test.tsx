@@ -216,13 +216,23 @@ describe('medicine screen', () => {
     expect(liveQty(repos, shopId)).toEqual({ H2: 3 });
   });
 
-  it('toasts the reason when an action fails and shows meta and category back label', async () => {
+  it('toasts friendly copy, never the raw error, and shows meta and a plain Back', async () => {
     const { repos } = await open();
-    jest.spyOn(repos.inventory, 'sellOne').mockRejectedValue(new Error('No stock to sell'));
+    jest.spyOn(repos.inventory, 'sellOne').mockRejectedValue(new Error('no stock to sell'));
     await fireEvent.press(screen.getAllByRole('button', { name: 'Sold 1' })[0]);
-    expect(await screen.findByText('No stock to sell')).toBeOnTheScreen();
+    expect(
+      await screen.findByText("Couldn't save. Check the connection and try again."),
+    ).toBeOnTheScreen();
+    expect(screen.queryByText('no stock to sell')).toBeNull();
     expect(screen.getByText('Micro Labs · counted in cartons')).toBeOnTheScreen();
-    expect(screen.getByRole('button', { name: 'Back, Antibiotics' })).toBeOnTheScreen();
+    // Opened from somewhere other than its folder (an alert list, Home search).
+    expect(screen.getByRole('button', { name: 'Back, Back' })).toBeOnTheScreen();
+  });
+
+  it('names the folder on Back only when opened from that folder', async () => {
+    const s = await seed();
+    await renderRouter(routes(s.repos), { initialUrl: `/medicine/${s.medId}?from=folder` });
+    expect(await screen.findByRole('button', { name: 'Back, Antibiotics' })).toBeOnTheScreen();
   });
 
   it('Add batch opens manual intake for this medicine', async () => {

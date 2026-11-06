@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react';
 import { createAppRepos } from '@/data/firebase';
 import type { Repos } from '@/data/repositories';
 import { AppShell } from '@/features/shared/AppShell';
-import { ToastProvider, useToast } from '@/features/shared/Toast';
+import { errorCopy, ToastProvider, useToast } from '@/features/shared/Toast';
 import { expoNotifier } from '@/services/notifications/expo';
 import { ErrorState, Screen } from '@/ui';
 import { useAppFonts } from '@/ui/fonts';
@@ -16,7 +16,7 @@ function Root() {
 
   useEffect(() => {
     let live = true;
-    createAppRepos((e) => toast(`Couldn't save: ${e.message}`))
+    createAppRepos((e) => toast(errorCopy(e, "Couldn't save. Check the connection and try again.")))
       .then((r) => live && setRepos(r))
       .catch((e: Error) => live && setError(e.message));
     return () => {
