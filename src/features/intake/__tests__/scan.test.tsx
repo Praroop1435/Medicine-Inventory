@@ -5,6 +5,7 @@ import { AppShell } from '@/features/shared/AppShell';
 import { ToastProvider } from '@/features/shared/Toast';
 import type { OcrEngine, OcrLine } from '@/services/ocr/OcrEngine';
 import type { PdfRenderer } from '@/services/pdf/PdfRenderer';
+import type { Permission } from '@/services/Permission';
 import { T } from '@/ui';
 import { useIntake } from '../IntakeContext';
 import { ScanScreen } from '../screens/ScanScreen';
@@ -20,7 +21,6 @@ let mockGranted = true;
 jest.mock('expo-camera', () => {
   const { forwardRef, useImperativeHandle } = jest.requireActual('react');
   return {
-    useCameraPermissions: () => [{ granted: mockGranted }, jest.fn()],
     CameraView: forwardRef((_p: unknown, ref: unknown) => {
       useImperativeHandle(ref, () => ({
         takePictureAsync: async () => ({ uri: 'file:///cache/bill.jpg' }),
@@ -69,6 +69,11 @@ const pdfRenderer = (fail = false, pageCount = 2): PdfRenderer => ({
   },
 });
 
+const camera: Permission = {
+  getPermission: async () => (mockGranted ? 'granted' : 'denied'),
+  requestPermission: async () => mockGranted,
+};
+
 async function start(lines: OcrLine[] | Error, renderer: PdfRenderer = pdfRenderer()) {
   const engine: OcrEngine = {
     recognize: async (uri) => {
@@ -86,7 +91,7 @@ async function start(lines: OcrLine[] | Error, renderer: PdfRenderer = pdfRender
           <AppShell repos={repos} />
         </ToastProvider>
       ),
-      index: () => <ScanScreen engine={engine} renderer={renderer} />,
+      index: () => <ScanScreen engine={engine} renderer={renderer} camera={camera} />,
       'intake/review': ReviewStub,
       'intake/manual': () => <T>Manual stub</T>,
     },
@@ -126,10 +131,22 @@ describe('scan screen', () => {
 
   it('still offers the gallery when the camera is denied', async () => {
     mockGranted = false;
+    mockStore.set('permission-seen-camera', '1');
     await start(GOOD);
     expect(await screen.findByText(/Camera permission is off/)).toBeOnTheScreen();
+    expect(screen.getByRole('button', { name: 'Open settings' })).toBeOnTheScreen();
+    expect(screen.getByRole('button', { name: 'Camera' })).toBeDisabled();
     await fireEvent.press(screen.getByRole('button', { name: 'Photo from gallery' }));
     expect(await screen.findByText(/Review stub: 2/)).toBeOnTheScreen();
+  });
+
+  it('explains the camera before the first system prompt', async () => {
+    mockGranted = false;
+    await start(GOOD);
+    expect(
+      await screen.findByText('The camera is used to photograph bills. Photos stay on this phone.'),
+    ).toBeOnTheScreen();
+    expect(screen.getByRole('button', { name: 'Continue' })).toBeOnTheScreen();
   });
 
   it('distinguishes an engine failure from zero rows', async () => {

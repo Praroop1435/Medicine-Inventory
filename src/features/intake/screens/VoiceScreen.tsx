@@ -5,6 +5,7 @@ import type { DraftBatch } from '@/domain/draft';
 import { shopUnits } from '@/domain/types';
 import { useShop } from '@/features/shared/hooks/useShop';
 import { useInventory } from '@/features/shared/hooks/useInventory';
+import { PermissionPrompt, usePermissionGate } from '@/features/shared/PermissionGate';
 import { useToast } from '@/features/shared/Toast';
 import { PermissionDenied, type SpeechEngine } from '@/services/speech/SpeechEngine';
 import { nativeSpeechEngine } from '@/services/speech/native';
@@ -18,6 +19,7 @@ export function VoiceScreen({ engine = nativeSpeechEngine }: { engine?: SpeechEn
   const shop = useShop();
   const { setDrafts } = useIntake();
   const toast = useToast();
+  const mic = usePermissionGate('mic', engine);
   const [available, setAvailable] = useState<boolean | null>(null);
   const [transcript, setTranscript] = useState('');
   const [list, setList] = useState<DraftBatch[]>([]);
@@ -85,6 +87,17 @@ export function VoiceScreen({ engine = nativeSpeechEngine }: { engine?: SpeechEn
       </Screen>
     );
   }
+
+  if (mic.state !== 'granted')
+    return (
+      <Screen back="Back" title="Speak">
+        <PermissionPrompt
+          gate={mic}
+          reason="The microphone is used to add stock by voice."
+          off="Microphone permission is off. Turn it on to add stock by voice, or use Type instead."
+        />
+      </Screen>
+    );
 
   return (
     <Screen back="Back" title="Speak">

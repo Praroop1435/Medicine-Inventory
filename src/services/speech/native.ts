@@ -1,4 +1,5 @@
 import { ExpoSpeechRecognitionModule } from 'expo-speech-recognition';
+import type { PermissionStatus } from '../Permission';
 import { PermissionDenied, type SpeechEngine } from './SpeechEngine';
 
 let last = '';
@@ -12,6 +13,10 @@ const clear = () => {
 
 export const nativeSpeechEngine: SpeechEngine = {
   isAvailable: async () => ExpoSpeechRecognitionModule.isRecognitionAvailable(),
+  getPermission: async () =>
+    (await ExpoSpeechRecognitionModule.getPermissionsAsync()).status as PermissionStatus,
+  requestPermission: async () =>
+    (await ExpoSpeechRecognitionModule.requestPermissionsAsync()).granted,
   async start(onPartial) {
     starting = true;
     cancelled = false;

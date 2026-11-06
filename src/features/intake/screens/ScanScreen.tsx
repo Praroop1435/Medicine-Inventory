@@ -1,16 +1,19 @@
 import { getDocumentAsync } from 'expo-document-picker';
-import { CameraView, useCameraPermissions } from 'expo-camera';
+import { CameraView } from 'expo-camera';
 import { launchImageLibraryAsync } from 'expo-image-picker';
 import { router } from 'expo-router';
 import { useRef, useState } from 'react';
 import { View } from 'react-native';
+import { cameraPermission } from '@/services/camera';
 import type { OcrEngine } from '@/services/ocr/OcrEngine';
 import { parseBillText } from '@/services/ocr/billParser';
 import { mlkitOcrEngine } from '@/services/ocr/mlkit';
 import { nativePdfRenderer } from '@/services/pdf/native';
 import type { PdfRenderer } from '@/services/pdf/PdfRenderer';
+import type { Permission } from '@/services/Permission';
 import { MAX_PDF_PAGES, readPdfBill } from '@/services/pdf/readPdfBill';
 import { Button, ButtonRow, Screen, T, tokens } from '@/ui';
+import { PermissionPrompt, usePermissionGate } from '@/features/shared/PermissionGate';
 import { useToast } from '@/features/shared/Toast';
 import { useIntake } from '../IntakeContext';
 
@@ -23,13 +26,15 @@ const PDF_FAILED = "Couldn't open this PDF.";
 export function ScanScreen({
   engine = mlkitOcrEngine,
   renderer = nativePdfRenderer,
+  camera: cameraSource = cameraPermission,
 }: {
   engine?: OcrEngine;
   renderer?: PdfRenderer;
+  camera?: Permission;
 }) {
   const { setDrafts } = useIntake();
   const toast = useToast();
-  const [permission, requestPermission] = useCameraPermissions();
+  const gate = usePermissionGate('camera', cameraSource);
   const camera = useRef<CameraView>(null);
   const busy = useRef(false);
   const [phase, setPhase] = useState<'ready' | 'reading' | 'empty' | 'failed'>('ready');
@@ -104,7 +109,7 @@ export function ScanScreen({
       </Screen>
     );
 
-  const granted = permission?.granted;
+  const granted = gate.state === 'granted';
   return (
     <Screen back="Back" title="Scan bill">
       <View style={{ gap: tokens.space[3] }}>
@@ -122,17 +127,15 @@ export function ScanScreen({
               }}
             />
           </View>
-        ) : permission ? (
-          <T color={tokens.color.muted}>
-            Camera permission is off. Allow it to photograph the bill, or pick a photo instead.
-          </T>
-        ) : null}
+        ) : (
+          <PermissionPrompt
+            gate={gate}
+            reason="The camera is used to photograph bills. Photos stay on this phone."
+            off="Camera permission is off. Allow it to photograph the bill, or pick a photo instead."
+          />
+        )}
         <ButtonRow>
-          {granted || !permission ? (
-            <Button label="Camera" disabled={!granted} onPress={capture} />
-          ) : (
-            <Button label="Allow camera" onPress={requestPermission} />
-          )}
+          <Button label="Camera" disabled={!granted} onPress={capture} />
           <Button label="Photo from gallery" variant="secondary" onPress={pick} />
           <Button label="PDF file" variant="secondary" onPress={pickPdf} />
         </ButtonRow>

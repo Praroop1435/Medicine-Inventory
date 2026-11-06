@@ -1,21 +1,21 @@
-import { CameraView, useCameraPermissions } from 'expo-camera';
+import { CameraView } from 'expo-camera';
 import { router } from 'expo-router';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { View } from 'react-native';
-import { Button, ErrorState, Screen, T, tokens } from '@/ui';
+import { PermissionPrompt, usePermissionGate } from '@/features/shared/PermissionGate';
+import { cameraPermission } from '@/services/camera';
+import { ErrorState, Screen, tokens } from '@/ui';
 import { parseQrPayload } from '../qr';
 
 function QrScanner({ onScan }: { onScan: (data: string) => void }) {
-  const [permission, requestPermission] = useCameraPermissions();
-  if (!permission) return null;
-  if (!permission.granted)
+  const gate = usePermissionGate('camera', cameraPermission);
+  if (gate.state !== 'granted')
     return (
-      <View style={{ gap: tokens.space[3] }}>
-        <T size={14} color={tokens.color.muted}>
-          The camera is needed to scan the shop QR from another phone.
-        </T>
-        <Button label="Allow camera" onPress={requestPermission} />
-      </View>
+      <PermissionPrompt
+        gate={gate}
+        reason="The camera is needed to scan the shop QR from another phone."
+        off="Camera permission is off. Turn it on to scan the shop QR."
+      />
     );
   return (
     <View style={{ borderRadius: tokens.radius.card, overflow: 'hidden' }}>

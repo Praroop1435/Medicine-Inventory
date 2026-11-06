@@ -20,9 +20,11 @@ function ReviewStub() {
   return <T>{`Review stub: ${drafts.map((d) => d.batchNo).join(',')}`}</T>;
 }
 
-function fake(available: boolean, said: string[]): SpeechEngine {
+function fake(available: boolean, said: string[], mic = true): SpeechEngine {
   let partial: (t: string) => void = () => {};
   return {
+    getPermission: async () => (mic ? 'granted' : 'denied'),
+    requestPermission: async () => mic,
     isAvailable: async () => available,
     start: async (p) => void (partial = p),
     stop: async () => {
@@ -92,6 +94,22 @@ describe('voice screen', () => {
     ).toBeOnTheScreen();
     await fireEvent.press(screen.getByRole('button', { name: 'Type instead' }));
     expect(await screen.findByText('Manual stub')).toBeOnTheScreen();
+  });
+
+  it('explains the microphone once, and shows Open settings when it is off', async () => {
+    const e = fake(true, [], false);
+    await start(e);
+    expect(
+      await screen.findByText('The microphone is used to add stock by voice.'),
+    ).toBeOnTheScreen();
+    expect(screen.queryByRole('button', { name: 'Hold to speak' })).toBeNull();
+    await fireEvent.press(screen.getByRole('button', { name: 'Continue' }));
+    expect(
+      await screen.findByText(
+        'Microphone permission is off. Turn it on to add stock by voice, or use Type instead.',
+      ),
+    ).toBeOnTheScreen();
+    expect(screen.getByRole('button', { name: 'Open settings' })).toBeOnTheScreen();
   });
 
   it('toasts when the microphone is refused', async () => {
