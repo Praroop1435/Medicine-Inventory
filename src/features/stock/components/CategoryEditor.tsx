@@ -41,7 +41,7 @@ export function CategoryEditor({
         }),
       );
     } catch (e) {
-      toast(e instanceof Error ? e.message : 'Something went wrong');
+      toast(e instanceof Error ? e.message : "Couldn't save. Check the connection and try again.");
     }
   };
   return (

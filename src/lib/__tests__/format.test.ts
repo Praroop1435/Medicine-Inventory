@@ -1,4 +1,14 @@
-import { expiresIn, pluralUnit } from '../format';
+import { expiresIn, pluralUnit, unitWord } from '../format';
+
+describe('unitWord', () => {
+  it('is the word alone, for "counted in boxes"', () => {
+    expect([unitWord('box', 2), unitWord('carton', 1), unitWord('drops', 2)]).toEqual([
+      'boxes',
+      'carton',
+      'drops',
+    ]);
+  });
+});
 
 describe('pluralUnit', () => {
   it.each([

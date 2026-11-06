@@ -36,7 +36,11 @@ export function BulkScreen() {
       else if (parsed.drafts.length) review(parsed.drafts);
       else toast('No rows found in that file');
     } catch (e) {
-      toast(e instanceof Error ? e.message : 'Could not read that file');
+      toast(
+        e instanceof Error
+          ? e.message
+          : "Couldn't read that file. Save it as .xlsx or .csv and try again.",
+      );
     }
   };
 
@@ -50,7 +54,9 @@ export function BulkScreen() {
           <Button
             label="Get template"
             variant="secondary"
-            onPress={() => shareTemplate().catch(() => toast('Could not share the template'))}
+            onPress={() =>
+              shareTemplate().catch(() => toast("Couldn't share the template. Try again."))
+            }
           />
           <Button label="Pick file" onPress={pick} />
         </ButtonRow>

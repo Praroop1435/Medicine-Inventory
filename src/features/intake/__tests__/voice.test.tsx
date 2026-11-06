@@ -120,7 +120,9 @@ describe('voice screen', () => {
     };
     await start(e);
     await speak();
-    expect(await screen.findByText('Microphone permission is needed for voice')).toBeOnTheScreen();
+    expect(
+      await screen.findByText('Turn on the microphone to add stock by voice.'),
+    ).toBeOnTheScreen();
   });
 
   it('stops once start resolves when released during the permission prompt', async () => {

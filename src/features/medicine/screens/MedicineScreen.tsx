@@ -4,6 +4,7 @@ import { View } from 'react-native';
 import { useRepos } from '@/data/RepoContext';
 import { medicineSummary } from '@/domain/alerts';
 import { expiryDate, formatExpiry } from '@/domain/expiry';
+import { unitWord } from '@/lib/format';
 import type { Device, StockEvent } from '@/domain/types';
 import { useSession } from '@/features/onboarding/SessionContext';
 import { useInventory } from '@/features/shared/hooks/useInventory';
@@ -66,7 +67,10 @@ export function MedicineScreen() {
   const act = (f: Promise<void>, ok?: string) =>
     f.then(
       () => void (ok && toast(ok)),
-      (e: unknown) => toast(e instanceof Error ? e.message : 'Something went wrong'),
+      (e: unknown) =>
+        toast(
+          e instanceof Error ? e.message : "Couldn't save. Check the connection and try again.",
+        ),
     );
 
   return (
@@ -75,7 +79,7 @@ export function MedicineScreen() {
       meta={[
         companies.find((c) => c.id === med.companyId)?.name,
         med.composition,
-        `counted in ${med.unit}${med.unit === 'box' ? 'es' : 's'}`,
+        `counted in ${unitWord(med.unit, 2)}`,
       ]
         .filter(Boolean)
         .join(' · ')}

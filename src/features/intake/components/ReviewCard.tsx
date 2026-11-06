@@ -70,7 +70,7 @@ export function ReviewCard({ draft: d, onChange, onConfirm, onRemove, flagMissin
       onChange({ unit: newUnit.trim().toLowerCase() });
       setNewUnit(null);
     } catch (e) {
-      toast(e instanceof Error ? e.message : 'Something went wrong');
+      toast(e instanceof Error ? e.message : "Couldn't save. Check the connection and try again.");
     }
   };
   const issues = draftIssues(d);

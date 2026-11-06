@@ -51,8 +51,8 @@ export function VoiceScreen({ engine = nativeSpeechEngine }: { engine?: SpeechEn
       setListening(false);
       toast(
         e instanceof PermissionDenied
-          ? 'Microphone permission is needed for voice'
-          : 'Could not start listening',
+          ? 'Turn on the microphone to add stock by voice.'
+          : "Couldn't start listening. Try again, or use Type.",
       );
       return;
     }

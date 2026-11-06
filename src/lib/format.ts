@@ -1,8 +1,11 @@
 import type { Unit } from '@/domain/types';
 
+/** "carton" / "cartons" / "boxes": the unit word for n, without the number. */
+export const unitWord = (unit: Unit, n: number): string =>
+  n === 1 || unit === 'drops' ? unit : /(s|x|z|ch|sh)$/.test(unit) ? `${unit}es` : `${unit}s`;
+
 /** "1 carton" / "5 cartons" / "2 boxes". */
-export const pluralUnit = (unit: Unit, n: number): string =>
-  `${n} ${n === 1 || unit === 'drops' ? unit : /(s|x|z|ch|sh)$/.test(unit) ? `${unit}es` : `${unit}s`}`;
+export const pluralUnit = (unit: Unit, n: number): string => `${n} ${unitWord(unit, n)}`;
 
 export const medicineCount = (n: number): string => `${n} medicine${n === 1 ? '' : 's'}`;
 

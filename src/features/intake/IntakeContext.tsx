@@ -71,7 +71,7 @@ export function useSaveDrafts() {
   const session = useSession().session;
   return (drafts: DraftBatch[], bill: BillHeader | null): Promise<void> => {
     if (!session) return Promise.reject(new Error('No shop on this phone'));
-    if (!canSave(drafts)) return Promise.reject(new Error('Some fields still need a look'));
+    if (!canSave(drafts)) return Promise.reject(new Error('Confirm the amber fields to save'));
     return inventory.saveIntake(
       session.shopId,
       drafts,

@@ -287,7 +287,7 @@ describe('review screen', () => {
     const spy = jest.spyOn(s.repos.inventory, 'saveIntake');
     pending = { drafts: sixDrafts(s) };
     await fireEvent.press(screen.getByRole('button', { name: 'Force save' }));
-    expect(await screen.findByText('Some fields still need a look')).toBeOnTheScreen();
+    expect(await screen.findByText('Confirm the amber fields to save')).toBeOnTheScreen();
     expect(spy).not.toHaveBeenCalled();
   });
 

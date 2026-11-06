@@ -20,7 +20,9 @@ export function FolderMenu({ folder, onClose }: { folder: Category; onClose: () 
   const { shopId, deviceId } = session;
   const run = (p: Promise<void>) => {
     onClose();
-    p.catch((e: unknown) => toast(e instanceof Error ? e.message : 'Something went wrong'));
+    p.catch((e: unknown) =>
+      toast(e instanceof Error ? e.message : "Couldn't save. Check the connection and try again."),
+    );
   };
   const empty =
     childrenOf(categories, folder.id).length === 0 &&
