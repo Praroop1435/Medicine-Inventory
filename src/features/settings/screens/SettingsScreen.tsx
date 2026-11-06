@@ -14,6 +14,7 @@ import type { Updater } from '@/services/updates/Updater';
 import {
   Button,
   Card,
+  Checkbox,
   ConfirmDialog,
   ErrorState,
   Field,
@@ -98,6 +99,8 @@ export function SettingsScreen({ updater = expoUpdater }: { updater?: Updater })
   const [devices, setDevices] = useState<Device[]>([]);
   const [removing, setRemoving] = useState<Device | null>(null);
   const [rotating, setRotating] = useState(false);
+  // A removed phone may be lost with the QR on it: by default its join code dies with it.
+  const [newCode, setNewCode] = useState(true);
   const [name, setName] = useState(session?.displayName ?? '');
   const shopId = session?.shopId;
   const me = session?.deviceId;
@@ -113,10 +116,6 @@ export function SettingsScreen({ updater = expoUpdater }: { updater?: Updater })
     if (await notifier.requestPermission().catch(() => false)) notifications.setStatus('granted');
     else void Linking.openSettings();
   };
-  const remove = (d: Device) => {
-    setRemoving(null);
-    if (shopId && me) shopRepo.removeDevice(shopId, d.id, me).catch(fail);
-  };
   const rotate = async () => {
     setRotating(false);
     if (!shopId || !me) return;
@@ -126,6 +125,16 @@ export function SettingsScreen({ updater = expoUpdater }: { updater?: Updater })
     } catch (e) {
       fail(e);
     }
+  };
+  const remove = async (d: Device) => {
+    setRemoving(null);
+    if (!shopId || !me) return;
+    try {
+      await shopRepo.removeDevice(shopId, d.id, me);
+    } catch (e) {
+      return fail(e);
+    }
+    if (newCode) await rotate();
   };
   const saveName = async () => {
     const n = name.trim();
@@ -178,7 +187,16 @@ export function SettingsScreen({ updater = expoUpdater }: { updater?: Updater })
               <ListRow
                 key={d.id}
                 title={d.displayName}
-                right={<Button label="Remove" variant="secondary" onPress={() => setRemoving(d)} />}
+                right={
+                  <Button
+                    label="Remove"
+                    variant="secondary"
+                    onPress={() => {
+                      setNewCode(true);
+                      setRemoving(d);
+                    }}
+                  />
+                }
               />
             ),
           )}
@@ -202,9 +220,11 @@ export function SettingsScreen({ updater = expoUpdater }: { updater?: Updater })
           message="It loses access to the shop."
           confirmLabel="Remove"
           destructive
-          onConfirm={() => remove(removing)}
+          onConfirm={() => void remove(removing)}
           onCancel={() => setRemoving(null)}
-        />
+        >
+          <Checkbox label="Also make a new join code" checked={newCode} onChange={setNewCode} />
+        </ConfirmDialog>
       ) : null}
       {rotating ? (
         <ConfirmDialog

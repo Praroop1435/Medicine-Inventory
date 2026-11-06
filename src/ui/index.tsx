@@ -9,6 +9,7 @@ export { CountStrip } from './CountStrip';
 export { Button } from './Button';
 export { ButtonRow } from './ButtonRow';
 export { ConfirmDialog } from './ConfirmDialog';
+export { Checkbox } from './Checkbox';
 export { Sheet } from './Sheet';
 export { Stepper } from './Stepper';
 export { SearchField } from './SearchField';

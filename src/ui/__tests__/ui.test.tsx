@@ -4,6 +4,7 @@ import {
   ActionTile,
   Button,
   ButtonRow,
+  Checkbox,
   Chip,
   ConfirmDialog,
   CountStrip,
@@ -254,5 +255,16 @@ describe('ConfirmDialog', () => {
     await fireEvent.press(del);
     expect(onConfirm).toHaveBeenCalledTimes(1);
     expect(onCancel).not.toHaveBeenCalled();
+  });
+});
+
+describe('Checkbox', () => {
+  it('is a labelled checkbox that toggles', async () => {
+    const onChange = jest.fn();
+    await render(<Checkbox label="Also make a new join code" checked onChange={onChange} />);
+    const box = screen.getByRole('checkbox', { name: 'Also make a new join code' });
+    expect(box).toBeChecked();
+    await fireEvent.press(box);
+    expect(onChange).toHaveBeenCalledWith(false);
   });
 });

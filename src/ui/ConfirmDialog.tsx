@@ -1,3 +1,4 @@
+import type { ReactNode } from 'react';
 import { Modal, View } from 'react-native';
 import { Button } from './Button';
 import { ButtonRow } from './ButtonRow';
@@ -12,6 +13,7 @@ export function ConfirmDialog({
   destructive,
   onConfirm,
   onCancel,
+  children,
 }: {
   title: string;
   message?: string;
@@ -19,6 +21,8 @@ export function ConfirmDialog({
   destructive?: boolean;
   onConfirm: () => void;
   onCancel: () => void;
+  /** Options shown above the buttons, e.g. a Checkbox. */
+  children?: ReactNode;
 }) {
   return (
     <Modal visible transparent animationType="fade" onRequestClose={onCancel}>
@@ -44,6 +48,7 @@ export function ConfirmDialog({
             {title}
           </T>
           {message ? <T size={14}>{message}</T> : null}
+          {children}
           <ButtonRow>
             <Button label="Cancel" variant="secondary" onPress={onCancel} />
             <Button

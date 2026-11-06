@@ -150,6 +150,32 @@ describe('settings', () => {
       await waitFor(() => expect(screen.queryByText('Ravi')).toBeNull());
     });
 
+    it("removing a phone makes a new join code by default, so a lost phone's QR stops working", async () => {
+      const { r, shop, joinSecret, raviId, devices } = await open();
+      await fireEvent.press(await screen.findByRole('button', { name: 'Remove' }));
+      const dialog = await screen.findByTestId('confirm-dialog');
+      const box = within(dialog).getByRole('checkbox', { name: 'Also make a new join code' });
+      expect(box).toBeChecked();
+      await fireEvent.press(within(dialog).getByRole('button', { name: 'Remove' }));
+      await waitFor(() => expect(shop().joinSecret).not.toBe(joinSecret));
+      expect(devices().find((d) => d.id === raviId)?.removed).toBe(true);
+      expect(await screen.findByText(RECOVERY)).toBeOnTheScreen();
+      expect(r.getPathname()).toBe('/settings/qr');
+    });
+
+    it('the new join code can be turned off when removing a phone', async () => {
+      const { shop, joinSecret, raviId, devices } = await open();
+      await fireEvent.press(await screen.findByRole('button', { name: 'Remove' }));
+      const dialog = await screen.findByTestId('confirm-dialog');
+      await fireEvent.press(
+        within(dialog).getByRole('checkbox', { name: 'Also make a new join code' }),
+      );
+      expect(within(dialog).getByRole('checkbox')).not.toBeChecked();
+      await fireEvent.press(within(dialog).getByRole('button', { name: 'Remove' }));
+      await waitFor(() => expect(devices().find((d) => d.id === raviId)?.removed).toBe(true));
+      expect(shop().joinSecret).toBe(joinSecret);
+    });
+
     it('shows the join QR with the recovery-key sentence', async () => {
       const { r } = await open();
       await fireEvent.press(screen.getByRole('button', { name: 'Show join QR' }));
