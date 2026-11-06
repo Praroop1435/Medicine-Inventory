@@ -30,10 +30,10 @@ export function QrScreen({ again }: { again?: boolean }) {
       title={again ? 'Shop QR' : 'Save your shop QR'}
       footer={
         again ? (
-          <Button label="Save QR image" full onPress={save} />
+          <Button label="Save QR image" full disabled={!shop} onPress={save} />
         ) : (
           <ButtonRow>
-            <Button label="Save QR image" variant="secondary" onPress={save} />
+            <Button label="Save QR image" variant="secondary" disabled={!shop} onPress={save} />
             <Button label="I saved it" onPress={() => resetTo('/onboarding/notify')} />
           </ButtonRow>
         )

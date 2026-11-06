@@ -177,11 +177,23 @@ describe('settings', () => {
       expect(shop().joinSecret).toBe(joinSecret);
     });
 
+    it('Save QR image waits for the shop to load', async () => {
+      const repos = createMemoryRepos();
+      const { shopId, deviceId } = await repos.shop.createShop('Anand Medicals', 'Priya');
+      mockStore.set('session', JSON.stringify({ shopId, deviceId, displayName: 'Priya' }));
+      jest.spyOn(repos.shop, 'watchShop').mockReturnValue(() => {});
+      await renderRouter(
+        { _layout: () => <AppShell repos={repos} />, index: SettingsQr },
+        { initialUrl: '/' },
+      );
+      expect(await screen.findByRole('button', { name: 'Save QR image' })).toBeDisabled();
+    });
+
     it('shows the join QR with the recovery-key sentence', async () => {
       const { r } = await open();
       await fireEvent.press(screen.getByRole('button', { name: 'Show join QR' }));
       expect(await screen.findByText(RECOVERY)).toBeOnTheScreen();
-      expect(screen.getByRole('button', { name: 'Save QR image' })).toBeOnTheScreen();
+      expect(screen.getByRole('button', { name: 'Save QR image' })).toBeEnabled();
       expect(r.getPathname()).toBe('/settings/qr');
     });
 
