@@ -445,10 +445,9 @@ Settings = Expiry alerts (two day fields + time) · Phones (list, remove, show j
 ### Task 16b addendum (spec §11.4)
 Folder delete uses a confirm dialog (Cancel / Delete); disabled with reason when non-empty. Add a shared `ConfirmDialog` to `src/ui` (title, message, confirm label, destructive flag) and use it for: delete folder, mark returned (replace the inline confirm), remove phone (Task 17), save count 0 (medicine Edit count + stock check). Tests: each action does nothing on Cancel and acts on Confirm.
 
-### Task 17 addendum (spec §11.5): Nightly sales summary
-- Data: `watchEventsSince(shopId, sinceMs, cb)` on InventoryRepo (memory + firebase `where('at','>=',since).orderBy('at')` + index) + contract test.
-- Domain: `daySummary(events, medicines, today)` → `{ sold: {medicineId, units, byDeviceIds}[]; corrected: {medicineId, delta}[]; added: {medicineId, units}[]; soldUnits; soldMedicines; correctedCount }` + tests (only today's local-day events; sold = `sold` type; corrections = `count_fixed`/`checked` with delta ≠ 0; added = `added`).
-- `nightMessage(summary)` → "Today: 14 units sold across 9 medicines · 3 counts corrected" / null when all zero + tests.
-- Shop gains `nightTime` (default "21:00"). Notifier schedules two daily notifications (morning expiry `notifyTime`, night summary `nightTime`); useDailyAlert reschedules both on change. Tap on night notification → `/today`.
-- Screens: `app/today.tsx` Today screen (Sold · Counts corrected · Stock added sections, EmptyState "Nothing sold or changed today"); Home row "Sold today: N units · View".
+### Task 17 addendum (spec §11.5–11.6): Night stock-check reminder + permissions
+- Domain: `nightReminder(categories, today)` → "Time for tonight's stock update — mark what was sold today. Due: <Category> (not checked for N days | never checked)." (always returns a message) + tests.
+- Shop gains `nightTime` (default "21:00"). Notifier schedules two daily notifications (morning expiry `notifyTime` via `dailyMessage`, night reminder `nightTime` via `nightReminder`); useDailyAlert reschedules both when counts, categories' lastCheckedAt, alertDays or times change. Night tap → `/check/<dueCategoryId>` (or the Check tab if none).
+- Onboarding: new "Stay on top of expiry" step after the name step (Allow notifications → `requestPermission()`, Not now → continue); test both paths with a fake Notifier.
+- Permission rationale before first camera/mic use (one line + Continue) and an "Open settings" fallback (`Linking.openSettings()`) when denied; Settings → Reminders shows "Notifications are off · Turn on" when not granted.
 - Settings "Reminders" row: first/second warning days, morning time, night time.

@@ -255,10 +255,14 @@ Category and company management move out of Settings: categories are managed ins
 ### 11.4 Delete always asks first **[owner]**
 Every destructive action opens a confirm popup before doing anything: Delete folder ("Delete folder “Cough”? This can't be undone." · Cancel / Delete), Mark returned, Remove phone, and saving a count of 0 ("This closes batch AZ88"). A non-empty folder can't be deleted; its ⋯ menu shows "Delete" disabled with the reason "Move or remove what's inside first".
 
-### 11.5 Nightly sales summary **[owner]**
-- A **daily night notification** (default **9:00 PM**, changeable in Settings → Reminders) summarising today: "Today: 14 units sold across 9 medicines · 3 counts corrected". If nothing happened, no notification.
-- Tapping it opens a **Today** screen: list of what was sold today (medicine · units · who), then stock-check corrections (medicine · old → new), then stock added (bills/entries). Today = local calendar day.
-- "Sold" = `sold` events (Sold 1 taps). Count decreases from stock checks are shown separately as "counts corrected", not as sales **[call]** — the app can't know whether a missing strip was sold, lost or expired.
-- Built like the morning expiry alert: computed on the phone from today's events and rescheduled whenever they change while the app is open **[call]**. Known limit: sales made on another phone after this phone's app was last open appear when the Today screen is opened, but may be missing from that night's notification text.
-- Home gets one quiet row under the counts: "Sold today: 14 units · View" → Today screen.
-- Settings item 1 becomes **Reminders**: expiry warning days + morning alert time + night summary time.
+### 11.5 Nightly stock-check reminder **[owner, corrected]**
+- A **daily night reminder** (default **9:00 PM**, changeable in Settings → Reminders) telling staff to update stock: *"Time for tonight's stock update — mark what was sold today. Due: Antibiotics (not checked for 18 days)."* The "Due" part names the category checked least recently (or "never checked").
+- Tapping it opens the **Check** tab (or straight into the due category's check).
+- It is a reminder only — no sales report, no Today screen **[owner: "it is a reminder"]**.
+- The morning expiry alert (§6.8) stays as is.
+- Settings item 1 becomes **Reminders**: expiry warning days + morning alert time + night reminder time.
+
+### 11.6 Permissions asked properly at first start **[owner]**
+- During onboarding, after the phone's name, a **"Stay on top of expiry"** screen explains the two notifications (morning expiry alert, night stock reminder) with one button **"Allow notifications"** → the Android system prompt (Android 13+ `POST_NOTIFICATIONS`), and a quiet "Not now" **[call]**.
+- Camera (scan bill, join QR) and microphone (voice) are asked **when first used**, each with a one-line reason shown before the system prompt.
+- If a permission is denied: the feature shows what's off and a **"Open settings"** button to the app's Android settings page; Settings → Reminders shows "Notifications are off · Turn on".
